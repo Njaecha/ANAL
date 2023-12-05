@@ -1,5 +1,9 @@
 src/AmazingNewAccessoryLogic/.vs
 src/AmazingNewAccessoryLogic/packages
-*/bin
-*/bin/Debug
-*/obj
+src/AmazingNewAccessoryLogic/KK_AmazingNewAccessoryLogic/bin
+src/AmazingNewAccessoryLogic/KK_AmazingNewAccessoryLogic/obj
+src/AmazingNewAccessoryLogic/KKS_AmazingNewAccessoryLogic/bin
+src/AmazingNewAccessoryLogic/KKS_AmazingNewAccessoryLogic/obj
+src/AmazingNewAccessoryLogic/AmazingNewAccessoryLogic/bin
+src/AmazingNewAccessoryLogic/AmazingNewAccessoryLogic/obj
+.vscode
