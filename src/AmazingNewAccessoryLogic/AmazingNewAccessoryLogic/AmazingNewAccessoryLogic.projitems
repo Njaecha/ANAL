@@ -1,0 +1,19 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <MSBuildAllProjects Condition="'$(MSBuildVersion)' == '' Or '$(MSBuildVersion)' &lt; '16.0'">$(MSBuildAllProjects);$(MSBuildThisFileFullPath)</MSBuildAllProjects>
+    <HasSharedItems>true</HasSharedItems>
+    <SharedGUID>44a65022-e8b2-4bc3-bf29-fa6fb23cb89c</SharedGUID>
+  </PropertyGroup>
+  <PropertyGroup Label="Configuration">
+    <Import_RootNamespace>AmazingNewAccessoryLogic</Import_RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="$(MSBuildThisFileDirectory)AmazingNewAccessoryLogic.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)ANAL.CameraComponent.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)ANAL.CharacterController.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)ANAL.SerialisedGraph.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)ANAL.SerialisedNode.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)ASS.TriggerProperty.cs" />
+  </ItemGroup>
+</Project>
