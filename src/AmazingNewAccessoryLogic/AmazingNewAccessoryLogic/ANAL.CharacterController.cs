@@ -9,10 +9,6 @@ using MessagePack;
 using LogicFlows;
 using UnityEngine;
 using KKAPI.Maker;
-using IllusionFixes;
-using AmazingNewAccessoryLogic;
-using Illusion.Component.Correct;
-using NodeCanvas.Tasks.Actions;
 
 namespace AmazingNewAccessoryLogic
 {
@@ -366,12 +362,12 @@ namespace AmazingNewAccessoryLogic
                 case 1:
                 case 2:
                     LogicFlowGate or = addGate(outfit.Value, 2);
-                    or.setPosition(graph.getNodeAt((int)GetInputKey(clothingSlot, 0).Value).rect.position + new Vector2(30, 0));
+                    or.setPosition(graph.getNodeAt((int)GetInputKey(clothingSlot, 0).Value).rect.position + new Vector2(75, 0));
                     or.setInput(0, (int)GetInputKey(clothingSlot, 0));
                     or.setInput(1, (int)GetInputKey(clothingSlot, 1));
 
                     LogicFlowNode_NOT not = addGate(outfit.Value, 0) as LogicFlowNode_NOT;
-                    not.setPosition(or.rect.position + new Vector2(20, 0));
+                    not.setPosition(or.rect.position + new Vector2(75, 0));
                     not.setInput(0, or.index);
                     createdMetaInputs[outfit.Value].Add(clothingSlot, not);
                     return not;
@@ -379,17 +375,17 @@ namespace AmazingNewAccessoryLogic
                 case 4:
                 case 5:
                     LogicFlowGate or1 = addGate(outfit.Value, 2);
-                    or1.setPosition(graph.getNodeAt((int)GetInputKey(clothingSlot, 0).Value).rect.position + new Vector2(30, 0));
+                    or1.setPosition(graph.getNodeAt((int)GetInputKey(clothingSlot, 0).Value).rect.position + new Vector2(75, 0));
                     or1.setInput(0, (int)GetInputKey(clothingSlot, 0));
                     or1.setInput(1, (int)GetInputKey(clothingSlot, 1));
 
                     LogicFlowGate or2 = addGate(outfit.Value, 2);
-                    or2.setPosition(or1.rect.position + new Vector2(0, 30));
+                    or2.setPosition(or1.rect.position + new Vector2(75, 0));
                     or2.setInput(0, or1.index);
                     or2.setInput(1, (int)GetInputKey(clothingSlot, 3));
 
                     not = addGate(outfit.Value, 0) as LogicFlowNode_NOT;
-                    not.setPosition(or2.rect.position + new Vector2(20, 0));
+                    not.setPosition(or2.rect.position + new Vector2(75, 0));
                     not.setInput(0, or2.index);
                     createdMetaInputs[outfit.Value].Add(clothingSlot, not);
                     return not;
@@ -397,7 +393,7 @@ namespace AmazingNewAccessoryLogic
                 case 7:
                 case 8:
                     not = addGate(outfit.Value, 0) as LogicFlowNode_NOT;
-                    not.setPosition(graph.getNodeAt((int)GetInputKey(clothingSlot, 0).Value).rect.position + new Vector2(20, 0));
+                    not.setPosition(graph.getNodeAt((int)GetInputKey(clothingSlot, 0).Value).rect.position + new Vector2(75, 0));
                     not.setInput(0, (int)GetInputKey(clothingSlot, 0).Value);
                     createdMetaInputs[outfit.Value].Add(clothingSlot, not);
                     return not;
@@ -666,6 +662,192 @@ namespace AmazingNewAccessoryLogic
             return new Vector2(screenPos.x, Screen.height - screenPos.y);
         }
 
+        private void CreateNodesForAssData(Dictionary<int, Dictionary<int, TriggerProperty[]>> data, int outfit)
+        {
+            LogicFlowGraph graph;
+            if (!graphs.TryGetValue(outfit, out graph)) graph = createGraph();
+
+            List<int> doneSlots = new List<int>();
+
+            // Translation
+            foreach (int slot in data.Keys)
+            {
+                Dictionary<int, TriggerProperty[]> slotData = data[slot];
+
+                LogicFlowNode output = getOutput(slot, outfit);
+                if (output == null)
+                {
+                    output = addOutput(slot, outfit);
+                }
+
+                // no priorities, only one clothing slot
+                if (slotData.Keys.Count == 1)
+                {
+                    int clothingSlot = slotData.Keys.First();
+                    TriggerProperty[] trigs = slotData[clothingSlot];
+                    List<int> statesThatTurnTheOutputOn = new List<int>();
+                    foreach (TriggerProperty trig in trigs)
+                    {
+                        if (trig.Visible) statesThatTurnTheOutputOn.Add(trig.ClothingState);
+                    }
+                    switch (statesThatTurnTheOutputOn.Count)
+                    {
+                        case 0:
+                            break;
+                        case 1:
+                        case 2:
+                        case 3:
+                            output.setInput(0, connectInputs(statesThatTurnTheOutputOn, clothingSlot, outfit, graph).index);
+                            break;
+                        case 4:
+                            break;
+                    }
+                }
+                if (slotData.Keys.Count == 2)
+                {
+                    List<TriggerProperty[]> triggerProperties = new List<TriggerProperty[]>();
+                    List<int> outfitSlots = new List<int>();
+                    foreach(int key in slotData.Keys)
+                    {
+                        triggerProperties.Add(slotData[key]);
+                        outfitSlots.Add(key);
+                    }
+
+                    for (int i = 0; i < 4; i++) // for each state in outfitSlot1
+                    {
+                        TriggerProperty A = triggerProperties[0][i];
+                        TriggerProperty[] outfitSlot2 = triggerProperties[1];
+
+                        List<int> statesThatTurnTheOutputOn = new List<int>();
+                        foreach (TriggerProperty B in outfitSlot2)
+                        {
+                            if (
+                                ( A.Visible && B.Visible) // both claim visible
+                                || (A.Visible && (A.Priority >= B.Priority)) // A claims visible and has a higher or same priority as B
+                                || (B.Visible && (A.Priority < B.Priority)) // B claims visible and has a higher priority as A
+                            )
+                            {
+                                statesThatTurnTheOutputOn.Add(B.ClothingState);
+                            }
+                        }
+
+                        switch (statesThatTurnTheOutputOn.Count)
+                        {
+                            case 0:
+                                break;
+                            case 1:
+                            case 2:
+                            case 3:
+                                LogicFlowNode connectedInputs = connectInputs(statesThatTurnTheOutputOn, outfitSlots[1], outfit, graph);
+                                LogicFlowNode_AND and = new LogicFlowNode_AND(graph);
+                                and.setPosition(connectedInputs.rect.position + new Vector2(75, 0));
+                                and.setInput(0, connectedInputs.index);
+                                and.setInput(1, getInput(A.ClothingSlot, A.ClothingState, outfit).index);
+                                if (i != 3)
+                                {
+                                    LogicFlowNode_OR or = new LogicFlowNode_OR(graph);
+                                    or.setPosition(and.rect.position + new Vector2(75, 0));
+                                    or.setInput(1, and.index);
+                                    output.setInput(0, or.index);
+                                    output = or;
+                                }
+                                else
+                                {
+                                    output.setInput(0, and.index);
+                                }
+                                break;
+                            case 4:
+                                if (i != 3)
+                                {
+                                    LogicFlowNode input = getInput(A.ClothingSlot, A.ClothingState, outfit);
+                                    LogicFlowNode_OR or = new LogicFlowNode_OR(graph);
+                                    or.setPosition(input.rect.position + new Vector2(75, 0));
+                                    or.setInput(1, input.index);
+                                    output.setInput(0, or.index);
+                                    output = or;
+                                }
+                                else
+                                {
+                                    output.setInput(0, getInput(A.ClothingSlot, A.ClothingState, outfit).index);
+                                }
+                                break;
+                        }
+
+                    }
+                }
+
+
+                doneSlots.Add(slot);
+            }
+        }
+
+        private LogicFlowNode connectInputs(List<int> statesThatTurnTheOutputOn, int clothingSlot, int outfit, LogicFlowGraph graph)
+        {
+            switch (statesThatTurnTheOutputOn.Count)
+            {
+                case 0:
+                    return null;
+                case 1:
+                    LogicFlowNode input = getInput(clothingSlot, statesThatTurnTheOutputOn[0], outfit);
+                    return input;
+                case 2:
+                    LogicFlowNode input1 = getInput(clothingSlot, statesThatTurnTheOutputOn[0], outfit);
+                    LogicFlowNode input2 = getInput(clothingSlot, statesThatTurnTheOutputOn[1], outfit);
+                    LogicFlowNode_OR or0 = new LogicFlowNode_OR(graph);
+                    or0.setPosition(input1.rect.position + new Vector2(75, 0));
+                    or0.setInput(0, input1.index);
+                    or0.setInput(1, input2.index);
+                    return or0;
+                case 3:
+                    LogicFlowNode input_1 = getInput(clothingSlot, statesThatTurnTheOutputOn[0], outfit);
+                    LogicFlowNode input_2 = getInput(clothingSlot, statesThatTurnTheOutputOn[1], outfit);
+                    LogicFlowNode input_3 = getInput(clothingSlot, statesThatTurnTheOutputOn[2], outfit);
+
+                    LogicFlowNode_OR or1 = new LogicFlowNode_OR(graph);
+                    LogicFlowNode_OR or2 = new LogicFlowNode_OR(graph);
+
+                    or1.setPosition(input_1.rect.position + new Vector2(75, 0));
+                    or1.setInput(0, input_1.index);
+                    or1.setInput(1, input_2.index);
+
+                    or2.setPosition(or1.rect.position + new Vector2(75, 0));
+                    or2.setInput(0, or1.index);
+                    or2.setInput(1, input_3.index);
+                    return or2;
+                case 4:
+                    return null;
+                default:
+                    return null;
+            }
+        }
+
+        public void TranslateFromAssForCharacter(ChaFile chaFile = null)
+        {
+            if (chaFile == null) chaFile = ChaFileControl;
+            PluginData _pluginData = ExtendedSave.GetExtendedDataById(chaFile, "madevil.kk.ass");
+            if (_pluginData == null) return;
+            List<TriggerProperty> _triggers = new List<TriggerProperty>();
+            if (_pluginData.data.TryGetValue("TriggerPropertyList", out var ByteData) && ByteData != null)
+            {
+                _triggers = MessagePackSerializer.Deserialize<List<TriggerProperty>>((byte[])ByteData);
+            }
+            if (_triggers.IsNullOrEmpty()) return;
+            // <Outfit, <AccessorySlot, <ClothingSlot, <ClothingState>>>>
+            Dictionary<int, Dictionary<int, Dictionary<int, TriggerProperty[]>>> triggersForSlotForOutfit = new Dictionary<int, Dictionary<int, Dictionary<int, TriggerProperty[]>>>();
+            foreach (TriggerProperty tp in _triggers)
+            {
+                if (!triggersForSlotForOutfit.ContainsKey(tp.Coordinate)) triggersForSlotForOutfit.Add(tp.Coordinate, new Dictionary<int, Dictionary<int, TriggerProperty[]>>());
+                if (!triggersForSlotForOutfit[tp.Coordinate].ContainsKey(tp.Slot)) triggersForSlotForOutfit[tp.Coordinate].Add(tp.Slot, new Dictionary<int, TriggerProperty[]>());
+                if (!triggersForSlotForOutfit[tp.Coordinate][tp.Slot].ContainsKey(tp.ClothingSlot)) triggersForSlotForOutfit[tp.Coordinate][tp.Slot].Add(tp.ClothingSlot, new TriggerProperty[4]);
+                triggersForSlotForOutfit[tp.Coordinate][tp.Slot][tp.ClothingSlot][tp.ClothingState] = tp;
+            }
+
+            foreach(int key in triggersForSlotForOutfit.Keys)
+            {
+                CreateNodesForAssData(triggersForSlotForOutfit[key], key);
+            }
+        }
+
         public void TranslateFromAssForCoordinate(ChaFileCoordinate coordinate = null)
         {
             if (coordinate != null)
@@ -692,75 +874,7 @@ namespace AmazingNewAccessoryLogic
                 triggersForSlot[tp.Slot][tp.ClothingSlot][tp.ClothingState] = tp;
             }
 
-            LogicFlowGraph graph = getCurrentGraph();
-            if (graph == null) graph = createGraph();
-
-            List<int> doneSlots = new List<int>();
-
-            // Translation
-            foreach (int slot in triggersForSlot.Keys)
-            {
-                Dictionary<int, TriggerProperty[]> slotData = triggersForSlot[slot];
-
-                LogicFlowOutput output = getOutput(slot);
-                if (output == null)
-                {
-                    output = addOutput(slot);
-                }
-
-                // no priorities, only one clothing slot
-                if (slotData.Keys.Count == 1)
-                {
-                    int clothingSlot = slotData.Keys.First();
-                    TriggerProperty[] trigs = slotData[clothingSlot];
-                    List<int> statesThatTurnTheOutputOn = new List<int>();
-                    foreach(TriggerProperty trig in trigs)
-                    {
-                        if (trig.Visible) statesThatTurnTheOutputOn.Add(trig.ClothingState);
-                    }
-                    switch(statesThatTurnTheOutputOn.Count)
-                    {
-                        case 0:
-                            break;
-                        case 1:
-                            LogicFlowNode input = getInput(clothingSlot, statesThatTurnTheOutputOn[0]);
-                            output.setInput(0, input.index);
-                            break;
-                        case 2:
-                            LogicFlowNode input1 = getInput(clothingSlot, statesThatTurnTheOutputOn[0]);
-                            LogicFlowNode input2 = getInput(clothingSlot, statesThatTurnTheOutputOn[1]);
-                            LogicFlowNode_OR or0 = new LogicFlowNode_OR(graph);
-                            or0.setPosition(input1.rect.position + new Vector2(50, 0));
-                            or0.setInput(0, input1.index);
-                            or0.setInput(1, input2.index);
-                            output.setInput(0, or0.index);
-                            break;
-                        case 3:
-                            LogicFlowNode input_1 = getInput(clothingSlot, statesThatTurnTheOutputOn[0]);
-                            LogicFlowNode input_2 = getInput(clothingSlot, statesThatTurnTheOutputOn[1]);
-                            LogicFlowNode input_3 = getInput(clothingSlot, statesThatTurnTheOutputOn[2]);
-
-                            LogicFlowNode_OR or1 = new LogicFlowNode_OR(graph);
-                            LogicFlowNode_OR or2 = new LogicFlowNode_OR(graph);
-
-                            or1.setPosition(input_1.rect.position + new Vector2(50, 0));
-                            or1.setInput(0, input_1.index);
-                            or1.setInput(1, input_2.index);
-
-                            or2.setPosition(or1.rect.position + new Vector2(30, 0));
-                            or2.setInput(0, or1.index);
-                            or2.setInput(1, input_3.index);
-                            output.setInput(0, or2.index);
-                            break;
-                        case 4:
-                            break;
-                    }
-                }
-
-
-
-                doneSlots.Add(slot);
-            }
+            CreateNodesForAssData(triggersForSlot, ChaControl.fileStatus.coordinateType);
         }
 
         public static InputKey? GetInputKey(int clothingSlot, int clothingState)
