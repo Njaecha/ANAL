@@ -883,6 +883,23 @@ namespace AmazingNewAccessoryLogic
                     return null;
             }
         }
+#if KKS
+        // KK -> KKS compatibility switcher
+        private int OutfitKK2KKS(int slot)
+        {
+            switch (slot)
+            {
+                case 0: return 4;
+                case 1: return 3;
+                case 2: return 5;
+                case 3: return 1;
+                case 4: return 6;
+                case 5: return 0;
+                case 6: return 2;
+                default: return -1;
+            }
+        }
+#endif
 
         public void TranslateFromAssForCharacter(ChaFile chaFile = null)
         {
@@ -924,6 +941,12 @@ namespace AmazingNewAccessoryLogic
             if (_pluginData.data.TryGetValue("TriggerPropertyList", out var ByteData) && ByteData != null)
             {
                 _triggers = MessagePackSerializer.Deserialize<List<TriggerProperty>>((byte[])ByteData);
+#if KKS
+                if (ChaFileControl.GetLastErrorCode() == -1)
+                {
+                    _triggers.ForEach(t => t.Coordinate = OutfitKK2KKS(t.Coordinate));
+                }
+#endif
             }
             if (_triggers.IsNullOrEmpty()) return;
 
