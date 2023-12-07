@@ -9,6 +9,7 @@ using MessagePack;
 using LogicFlows;
 using UnityEngine;
 using KKAPI.Maker;
+using ADV.Commands.Chara;
 
 namespace AmazingNewAccessoryLogic
 {
@@ -29,10 +30,6 @@ namespace AmazingNewAccessoryLogic
         private byte[] oldClothStates;
 
         private string slotInputText = "1";
-
-        private Dictionary<int, Dictionary<int, Dictionary<int, LogicFlowNode_OR>>> placedOrs = new Dictionary<int, Dictionary<int, Dictionary<int, LogicFlowNode_OR>>>();
-        private Dictionary<int, Dictionary<int, Dictionary<int, LogicFlowNode_AND>>> placedAnds = new Dictionary<int, Dictionary<int, Dictionary<int, LogicFlowNode_AND>>>();
-        private Dictionary<int, Dictionary<int, LogicFlowNode_NOT>> placedNots = new Dictionary<int, Dictionary<int, LogicFlowNode_NOT>>();
 
         protected override void OnCardBeingSaved(GameMode currentGameMode)
         {
@@ -55,14 +52,10 @@ namespace AmazingNewAccessoryLogic
 
             graphs.Clear();
             activeSlots.Clear();
-            placedOrs.Clear();
-            placedNots.Clear();
-            placedAnds.Clear();
 
             PluginData data = GetExtendedData();
             if (data == null)
             {
-                TranslateFromAssForCharacter();
                 return;
             }
 
@@ -109,14 +102,10 @@ namespace AmazingNewAccessoryLogic
             }
             graphs.Remove(ChaControl.fileStatus.coordinateType);
             activeSlots.Remove(ChaControl.fileStatus.coordinateType);
-            placedOrs.Remove(ChaControl.fileStatus.coordinateType);
-            placedAnds.Remove(ChaControl.fileStatus.coordinateType);
-            placedNots.Remove(ChaControl.fileStatus.coordinateType);
 
             PluginData data = GetCoordinateExtendedData(coordinate);
             if (data == null)
             {
-                TranslateFromAssForCoordinate(coordinate);
                 return;
             }
 
@@ -253,8 +242,6 @@ namespace AmazingNewAccessoryLogic
                 addInput(key, new Vector2(10, topY - 50 * i), outfit.Value);
                 i++;
             }
-            // clear metainputs for graph
-            createdMetaInputs.Remove(outfit.Value);
             return graphs[outfit.Value];
         }
 
@@ -351,9 +338,6 @@ namespace AmazingNewAccessoryLogic
             }
             return constructMetaInput(clothingSlot, outfit);
         }
-
-        private Dictionary<int, Dictionary<int, LogicFlowNode_NOT>> createdMetaInputs = new Dictionary<int, Dictionary<int, LogicFlowNode_NOT>>();
-
         /// <summary>
         /// Auto constructs a Node which outputs if one or the other state of a clothingSlot is active
         /// </summary>
@@ -365,67 +349,55 @@ namespace AmazingNewAccessoryLogic
             if (!outfit.HasValue) outfit = ChaControl.fileStatus.coordinateType;
             if (!graphs.ContainsKey(outfit.Value)) return null;
             LogicFlowGraph graph = graphs[outfit.Value];
-            
-            if (createdMetaInputs.ContainsKey(outfit.Value) && createdMetaInputs[outfit.Value].ContainsKey(clothingSlot)) return createdMetaInputs[outfit.Value][clothingSlot];
-
-            if (!createdMetaInputs.ContainsKey(outfit.Value)) createdMetaInputs.Add(outfit.Value, new Dictionary<int, LogicFlowNode_NOT>());
-
+            LogicFlowNode or;
             switch(clothingSlot)
             {
                 case 0:
                 case 1:
                 case 2:
-                    LogicFlowGate or = addOrGateForInputs((int)GetInputKey(clothingSlot, 0), (int)GetInputKey(clothingSlot, 1), outfit.Value);
-                    or.setPosition(graph.getNodeAt((int)GetInputKey(clothingSlot, 0).Value).rect.position + new Vector2(75, 0));
-
-                    LogicFlowNode_NOT not = addNotForInput(or.index, outfit.Value);
-                    not.setPosition(or.rect.position + new Vector2(75, 0));
-                    createdMetaInputs[outfit.Value].Add(clothingSlot, not);
-                    return not;
+                    or = connectInputs(new List<int> { 0, 1 }, clothingSlot, outfit.Value, graph) ;
+                    break;
                 case 3:
                 case 4:
                 case 5:
-                    LogicFlowGate or1 = addOrGateForInputs((int)GetInputKey(clothingSlot, 0), (int)GetInputKey(clothingSlot, 1), outfit.Value);
-                    or1.setPosition(graph.getNodeAt((int)GetInputKey(clothingSlot, 0).Value).rect.position + new Vector2(75, 0));
-
-                    LogicFlowGate or2 = addOrGateForInputs(or1.index, (int)GetInputKey(clothingSlot, 1), outfit.Value);
-                    or2.setPosition(or1.rect.position + new Vector2(75, 0));
-
-                    not = addNotForInput(or2.index, outfit.Value);
-                    not.setPosition(or2.rect.position + new Vector2(75, 0));
-                    createdMetaInputs[outfit.Value].Add(clothingSlot, not);
-                    return not;
+                    or = connectInputs(new List<int> { 0, 1, 2 }, clothingSlot, outfit.Value, graph);
+                    break;
                 case 6:
                 case 7:
                 case 8:
-                    not = addNotForInput((int)GetInputKey(clothingSlot, 0).Value, outfit.Value);
-                    not.setPosition(graph.getNodeAt((int)GetInputKey(clothingSlot, 0).Value).rect.position + new Vector2(75, 0));
-
-                    createdMetaInputs[outfit.Value].Add(clothingSlot, not);
-                    return not;
+                    or = connectInputs(new List<int> { 0 }, clothingSlot, outfit.Value, graph);
+                    break;
                 default: return null;
             }
+
+            LogicFlowNode_NOT not = addNotForInput(or.index, outfit.Value);
+            not.setPosition(or.rect.position + new Vector2(75, 0));
+            return not;
         }
 
 
         private LogicFlowNode_OR addOrGateForInputs(int inId1, int inId2, int outfit)
         {
-            if (!placedOrs.ContainsKey(outfit)) placedOrs.Add(outfit, new Dictionary<int, Dictionary<int, LogicFlowNode_OR>>());
-
-            int smaller = inId1 < inId2 ? inId1 : inId2;
-            int bigger = inId1 >= inId2 ? inId1 : inId2;
-
-            if (placedOrs[outfit].ContainsKey(smaller) && placedOrs[outfit][smaller].ContainsKey(bigger))
+            if (!graphs.ContainsKey(outfit)) return null;
+            LogicFlowNode logicFlowNode = graphs[outfit].getAllNodes().Find(node =>
             {
-                return placedOrs[outfit][smaller][bigger];
-            }
+                if (node is null) return false;
+                if (node is LogicFlowNode_OR)
+                {
+                    LogicFlowNode in1 = node.inputAt(0);
+                    LogicFlowNode in2 = node.inputAt(1);
+                    if (in1 == null || in2 == null) return false;
+                    return (in1.index == inId1 && in2.index == inId2) || (in1.index == inId2 && in2.index == inId1);
+                }
+                return false;
+            });
+
+            if (logicFlowNode != null) return logicFlowNode as LogicFlowNode_OR;
             else
             {
                 LogicFlowNode_OR or = addGate(outfit, 2) as LogicFlowNode_OR;
-                or.setInput(0, smaller);
-                or.setInput(1, bigger);
-                if (!placedOrs[outfit].ContainsKey(smaller)) placedOrs[outfit].Add(smaller, new Dictionary<int, LogicFlowNode_OR>());
-                placedOrs[outfit][smaller].Add(bigger, or);
+                or.setInput(0, inId1);
+                or.setInput(1, inId2);
                 return or;
             }
         }
@@ -433,22 +405,26 @@ namespace AmazingNewAccessoryLogic
 
         private LogicFlowNode_AND addAndGateForInputs(int inId1, int inId2, int outfit)
         {
-            if (!placedAnds.ContainsKey(outfit)) placedAnds.Add(outfit, new Dictionary<int, Dictionary<int, LogicFlowNode_AND>>());
-
-            int smaller = inId1 < inId2 ? inId1 : inId2;
-            int bigger = inId1 >= inId2 ? inId1 : inId2;
-
-            if (placedAnds[outfit].ContainsKey(smaller) && placedAnds[outfit][smaller].ContainsKey(bigger))
+            if (!graphs.ContainsKey(outfit)) return null;
+            LogicFlowNode logicFlowNode = graphs[outfit].getAllNodes().Find(node =>
             {
-                return placedAnds[outfit][smaller][bigger];
-            }
+                if (node is null) return false;
+                if (node is LogicFlowNode_AND)
+                {
+                    LogicFlowNode in1 = node.inputAt(0);
+                    LogicFlowNode in2 = node.inputAt(1);
+                    if (in1 == null || in2 == null) return false;
+                    return (in1.index == inId1 && in2.index == inId2) || (in1.index == inId2 && in2.index == inId1);
+                }
+                return false;
+            });
+
+            if (logicFlowNode != null) return logicFlowNode as LogicFlowNode_AND;
             else
             {
                 LogicFlowNode_AND and = addGate(outfit, 1) as LogicFlowNode_AND;
-                and.setInput(0, smaller);
-                and.setInput(1, bigger);
-                if (!placedAnds[outfit].ContainsKey(smaller)) placedAnds[outfit].Add(smaller, new Dictionary<int, LogicFlowNode_AND>());
-                placedAnds[outfit][smaller].Add(bigger, and);
+                and.setInput(0, inId1);
+                and.setInput(1, inId2);
                 return and;
             }
         }
@@ -456,13 +432,14 @@ namespace AmazingNewAccessoryLogic
 
         private LogicFlowNode_NOT addNotForInput(int inId, int outfit)
         {
-            if (!placedNots.ContainsKey(outfit)) placedNots.Add(outfit, new Dictionary<int, LogicFlowNode_NOT>());
-            if (placedNots[outfit].ContainsKey(inId)) return placedNots[outfit][inId];
+            if (!graphs.ContainsKey(outfit)) return null;
+            LogicFlowNode logicFlowNode = graphs[outfit].getAllNodes().Find(node => node != null && node is LogicFlowNode_NOT && node.inputAt(0) != null && node.inputAt(0).index == inId);
+
+            if (logicFlowNode != null) return logicFlowNode as LogicFlowNode_NOT;
             else
             {
                 LogicFlowNode_NOT not = addGate(outfit, 0) as LogicFlowNode_NOT;
                 not.setInput(0, inId);
-                placedNots[outfit].Add(inId, not);
                 return not;
             }
         }
@@ -544,6 +521,7 @@ namespace AmazingNewAccessoryLogic
                         break;
                 }
                 gate.setPosition(graphs[outfit].rect.size/2 - (gate.rect.size / 2));
+
                 return gate;
             }
             return null;
@@ -654,7 +632,10 @@ namespace AmazingNewAccessoryLogic
 
             base.Update();
         }
-
+#if KKS
+        private bool kkcompatibility = false;
+#endif
+        private bool fullCharacter = false;
         void OnGUI()
         {
             if (lfg == null) return;
@@ -666,34 +647,41 @@ namespace AmazingNewAccessoryLogic
 
                 GUI.DrawTexture(new Rect(0, 0, Screen.width, Screen.height), rTex);
 
+                int boxSize = 265;
+#if KKS
+                boxSize += 30;
+#endif
+
                 GUI.Label(new Rect(screenToGUI(lfg.rect.position + new Vector2(10, lfg.rect.height + 35)), new Vector2(250, 25)), $"AmazingNewAccessoryLogic v{AmazingNewAccessoryLogic.Version}", headerTextStyle);
                 if (GUI.Button(new Rect(screenToGUI(lfg.rect.position + lfg.rect.size + new Vector2(-65, 32)), new Vector2(60, 20)), "Close"))
                 {
                     this.hide();
                 }
 
-                GUI.Box(new Rect(screenToGUI(lfg.rect.position + lfg.rect.size + new Vector2(5, 0)), new Vector2(130, 210)), "");
+                GUI.Box(new Rect(screenToGUI(lfg.rect.position + lfg.rect.size + new Vector2(5, 0)), new Vector2(130, boxSize)), "");
+
+                int i = 0;
 
                 // add nodes buttons
-                if (GUI.Button(new Rect(screenToGUI(lfg.rect.position + lfg.rect.size + new Vector2(10, -5)), new Vector2(120, 30)), "Add NOT Gate"))
+                if (GUI.Button(new Rect(screenToGUI(lfg.rect.position + lfg.rect.size + new Vector2(10, i-=5)), new Vector2(120, 30)), "Add NOT Gate"))
                 {
                     addGate(0);
                 }
-                if (GUI.Button(new Rect(screenToGUI(lfg.rect.position + lfg.rect.size + new Vector2(10, -40)), new Vector2(120, 30)), "Add AND Gate"))
+                if (GUI.Button(new Rect(screenToGUI(lfg.rect.position + lfg.rect.size + new Vector2(10, i-=35)), new Vector2(120, 30)), "Add AND Gate"))
                 {
                     addGate(1);
                 }
-                if (GUI.Button(new Rect(screenToGUI(lfg.rect.position + lfg.rect.size + new Vector2(10, -75)), new Vector2(120, 30)), "Add OR Gate"))
+                if (GUI.Button(new Rect(screenToGUI(lfg.rect.position + lfg.rect.size + new Vector2(10, i-=35)), new Vector2(120, 30)), "Add OR Gate"))
                 {
                     addGate(2);
                 }
-                if (GUI.Button(new Rect(screenToGUI(lfg.rect.position + lfg.rect.size + new Vector2(10, -110)), new Vector2(120, 30)), "Add XOR Gate"))
+                if (GUI.Button(new Rect(screenToGUI(lfg.rect.position + lfg.rect.size + new Vector2(10, i-=35)), new Vector2(120, 30)), "Add XOR Gate"))
                 {
                     addGate(3);
                 }
-                GUI.Label(new Rect(screenToGUI(lfg.rect.position + lfg.rect.size + new Vector2(15, -150)), new Vector2(80, 20)), "Acc-Slot:");
-                slotInputText = GUI.TextField(new Rect(screenToGUI(lfg.rect.position + lfg.rect.size + new Vector2(90, -150)), new Vector2(40, 20)), slotInputText);
-                if (GUI.Button(new Rect(screenToGUI(lfg.rect.position + lfg.rect.size + new Vector2(10, -175)), new Vector2(120, 30)), "Add Output"))
+                GUI.Label(new Rect(screenToGUI(lfg.rect.position + lfg.rect.size + new Vector2(15, i-=35)), new Vector2(80, 20)), "Acc-Slot:");
+                slotInputText = GUI.TextField(new Rect(screenToGUI(lfg.rect.position + lfg.rect.size + new Vector2(90, i)), new Vector2(40, 20)), slotInputText);
+                if (GUI.Button(new Rect(screenToGUI(lfg.rect.position + lfg.rect.size + new Vector2(10, i-=25)), new Vector2(120, 30)), "Add Output"))
                 {
                     
                     try
@@ -712,7 +700,20 @@ namespace AmazingNewAccessoryLogic
                     }
                     
                 }
+#if KKS
 
+                kkcompatibility = GUI.Toggle(new Rect(screenToGUI(lfg.rect.position + lfg.rect.size + new Vector2(10, i-=30)), new Vector2(120, 25)), kkcompatibility, "KK Compatiblity");
+#endif
+                if (GUI.Button(new Rect(screenToGUI(lfg.rect.position + lfg.rect.size + new Vector2(10, i -= 25)), new Vector2(120, 25)), fullCharacter ? "◀ All Outfits ▶" : "◀ Current Outfit ▶"))
+                {
+                    fullCharacter = !fullCharacter;
+                }
+                if (GUI.Button(new Rect(screenToGUI(lfg.rect.position + lfg.rect.size + new Vector2(10, i -= 30)), new Vector2(120, 30)), "Load from ASS"))
+                {
+                    if (fullCharacter) TranslateFromAssForCharacter();
+                    else if (ExtendedSave.GetExtendedDataById(ChaControl.nowCoordinate, "madevil.kk.ass") == null) TranslateFromAssForCharacter(ChaControl.fileStatus.coordinateType);
+                    else TranslateFromAssForCoordinate();
+                }
                 lfg.ongui();
             }
         }
@@ -787,6 +788,7 @@ namespace AmazingNewAccessoryLogic
                     for (int i = 0; i < 4; i++) // for each state in outfitSlot1
                     {
                         TriggerProperty A = triggerProperties[0][i];
+                        if (!validTrigger(A)) continue;
                         TriggerProperty[] outfitSlot2 = triggerProperties[1];
 
                         List<int> statesThatTurnTheOutputOn = new List<int>();
@@ -805,6 +807,21 @@ namespace AmazingNewAccessoryLogic
                         switch (statesThatTurnTheOutputOn.Count)
                         {
                             case 0:
+                                if (i == 3 && output is LogicFlowNode_OR)
+                                {
+                                    graph.getAllNodes().ForEach(node =>
+                                    {
+                                        if (node.inputAt(0) != null && node.inputAt(0).index == output.index)
+                                        {
+                                            node.setInput(0, output.inputAt(1).index);
+                                        }
+                                        else if (node.inputAt(1) != null && node.inputAt(1).index == output.index)
+                                        {
+                                            node.setInput(1, output.inputAt(1).index);
+                                        }
+                                    });
+                                    graph.RemoveNode(output.index);
+                                }
                                 break;
                             case 1:
                             case 2:
@@ -896,22 +913,41 @@ namespace AmazingNewAccessoryLogic
                 case 4: return 6;
                 case 5: return 0;
                 case 6: return 2;
-                default: return -1;
+                default: return slot;
             }
         }
 #endif
 
-        public void TranslateFromAssForCharacter(ChaFile chaFile = null)
+        public void TranslateFromAssForCharacter(int? OutfitSlot = null, ChaFile chaFile = null)
         {
             if (chaFile == null) chaFile = MakerAPI.LastLoadedChaFile ?? ChaFileControl;
             PluginData _pluginData = ExtendedSave.GetExtendedDataById(chaFile, "madevil.kk.ass");
-            if (_pluginData == null) return;
+            if (_pluginData == null)
+            {
+                AmazingNewAccessoryLogic.Logger.LogInfo($"No ASS Data found on {chaFile.charaFileName}" + (OutfitSlot.HasValue ? $" and slot {OutfitSlot.Value}" : ""));
+                return;
+            }
+
             List<TriggerProperty> _triggers = new List<TriggerProperty>();
             if (_pluginData.data.TryGetValue("TriggerPropertyList", out var ByteData) && ByteData != null)
             {
                 _triggers = MessagePackSerializer.Deserialize<List<TriggerProperty>>((byte[])ByteData);
+#if KKS
+                AmazingNewAccessoryLogic.Logger.LogInfo(MakerAPI.LastLoadedChaFile.GetLastErrorCode());
+                AmazingNewAccessoryLogic.Logger.LogInfo(ChaFileControl.GetLastErrorCode());
+                if (kkcompatibility)
+                {
+                    _triggers.ForEach(t => t.Coordinate = OutfitKK2KKS(t.Coordinate));
+                }
+#endif
+                if (OutfitSlot.HasValue) _triggers = _triggers.Where(x => x.Coordinate == OutfitSlot.Value).ToList();
             }
-            if (_triggers.IsNullOrEmpty()) return;
+            if (_triggers.IsNullOrEmpty())
+            {
+                AmazingNewAccessoryLogic.Logger.LogInfo($"No Valid TriggerProperties found on {chaFile.charaFileName}" + (OutfitSlot.HasValue ? $" and slot {OutfitSlot.Value}":""));
+                return;
+            }
+            AmazingNewAccessoryLogic.Logger.LogInfo($"Found {_triggers.Count} valid TriggerProperties on {chaFile.charaFileName}" + (OutfitSlot.HasValue ? $" and slot {OutfitSlot.Value}" : ""));
             // <Outfit, <AccessorySlot, <ClothingSlot, <ClothingState>>>>
             Dictionary<int, Dictionary<int, Dictionary<int, TriggerProperty[]>>> triggersForSlotForOutfit = new Dictionary<int, Dictionary<int, Dictionary<int, TriggerProperty[]>>>();
             foreach (TriggerProperty tp in _triggers)
@@ -935,21 +971,24 @@ namespace AmazingNewAccessoryLogic
                 coordinate = ChaControl.nowCoordinate;
             }
             PluginData _pluginData = ExtendedSave.GetExtendedDataById(coordinate, "madevil.kk.ass");
-            if (_pluginData == null) return;
+            if (_pluginData == null)
+            {
+                AmazingNewAccessoryLogic.Logger.LogInfo($"No ASS Data found on {coordinate.coordinateName}");
+                return;
+            }
+
             AmazingNewAccessoryLogic.Logger.LogInfo("Reading ASS Data");
             List<TriggerProperty> _triggers = new List<TriggerProperty>();
             if (_pluginData.data.TryGetValue("TriggerPropertyList", out var ByteData) && ByteData != null)
             {
                 _triggers = MessagePackSerializer.Deserialize<List<TriggerProperty>>((byte[])ByteData);
-#if KKS
-                if (ChaFileControl.GetLastErrorCode() == -1)
-                {
-                    _triggers.ForEach(t => t.Coordinate = OutfitKK2KKS(t.Coordinate));
-                }
-#endif
             }
-            if (_triggers.IsNullOrEmpty()) return;
-
+            if (_triggers.IsNullOrEmpty())
+            {
+                AmazingNewAccessoryLogic.Logger.LogInfo($"No TriggerProperties found on {coordinate.coordinateName}");
+                return;
+            }
+            AmazingNewAccessoryLogic.Logger.LogInfo($"Found {_triggers.Count} valid TriggerProperties on {coordinate.coordinateName}");
             AmazingNewAccessoryLogic.Logger.LogInfo($"Processing ASS Data: {_triggers.Count} TriggerProperties found");
             // <AccessorySlot, <ClothingSlot, <ClothingState>>>
             Dictionary<int, Dictionary<int, TriggerProperty[]>> triggersForSlot = new Dictionary<int, Dictionary<int, TriggerProperty[]>>();
