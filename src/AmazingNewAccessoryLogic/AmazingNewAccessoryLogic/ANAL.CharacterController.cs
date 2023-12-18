@@ -9,7 +9,6 @@ using MessagePack;
 using LogicFlows;
 using UnityEngine;
 using KKAPI.Maker;
-using ADV.Commands.Chara;
 
 namespace AmazingNewAccessoryLogic
 {
@@ -136,7 +135,7 @@ namespace AmazingNewAccessoryLogic
                 LogicFlowOutput destNode = (LogicFlowOutput)lfg.getNodeAt(1000000 + destinationSlot);
                 if (destNode == null) destNode = addOutput(destinationSlot);
                 LogicFlowNode sourceNode = (LogicFlowOutput)lfg.getNodeAt(1000000 + sourceSlot);
-                destNode.setInput(0,sourceNode.inputAt(0).index);
+                destNode.SetInput(0,sourceNode.inputAt(0).index);
             }
         }
 
@@ -181,29 +180,29 @@ namespace AmazingNewAccessoryLogic
             {
                 case SerialisedNode.NodeType.Gate_NOT:
                     node = new LogicFlowNode_NOT(graphs[outfit], key: sNode.index) { label = "NOT", toolTipText = "NOT" };
-                    node.setInput(0, sNode.data[0]);
+                    node.SetInput(0, sNode.data[0]);
                     break;
                 case SerialisedNode.NodeType.Gate_AND:
                     node = new LogicFlowNode_AND(graphs[outfit], key: sNode.index) { label = "AND", toolTipText = "AND" };
-                    node.setInput(0, sNode.data[0]);
-                    node.setInput(1, sNode.data[1]);
+                    node.SetInput(0, sNode.data[0]);
+                    node.SetInput(1, sNode.data[1]);
                     break;
                 case SerialisedNode.NodeType.Gate_OR:
                     node = new LogicFlowNode_OR(graphs[outfit], key: sNode.index) { label = "OR", toolTipText = "OR" };
-                    node.setInput(0, sNode.data[0]);
-                    node.setInput(1, sNode.data[1]);
+                    node.SetInput(0, sNode.data[0]);
+                    node.SetInput(1, sNode.data[1]);
                     break;
                 case SerialisedNode.NodeType.Gate_XOR:
                     node = new LogicFlowNode_XOR(graphs[outfit], key: sNode.index) { label = "XOR", toolTipText = "XOR" };
-                    node.setInput(0, sNode.data[0]);
-                    node.setInput(1, sNode.data[1]);
+                    node.SetInput(0, sNode.data[0]);
+                    node.SetInput(1, sNode.data[1]);
                     break;
                 case SerialisedNode.NodeType.Input:
                     node = addInput((InputKey)sNode.index, sNode.postion, outfit);
                     break;
                 case SerialisedNode.NodeType.Output:
                     node = addOutput(sNode.data[0], outfit);
-                    node.setInput(0, sNode.data[1]);
+                    node.SetInput(0, sNode.data[1]);
                     break;
             }
             if (node != null)
@@ -231,7 +230,7 @@ namespace AmazingNewAccessoryLogic
         {
             if (!outfit.HasValue) outfit = ChaControl.fileStatus.coordinateType;
             if (graphs == null) graphs = new Dictionary<int, LogicFlowGraph>();
-            graphs[outfit.Value] = new LogicFlowGraph(new Rect(200, 200, 500, 900));
+            graphs[outfit.Value] = new LogicFlowGraph(new Rect(new Vector2(100,10), new Vector2(500, 900) * (LogicFlows.LogicFlows.SmallUI ? 0.5f : 1f)));
             if (activeSlots == null) activeSlots = new Dictionary<int, List<int>>();
             activeSlots[outfit.Value] = new List<int>();
             float topY = graphs[outfit.Value].rect.height;
@@ -239,7 +238,7 @@ namespace AmazingNewAccessoryLogic
             int i = 1;
             foreach(InputKey key in Enum.GetValues(typeof(InputKey)))
             {
-                addInput(key, new Vector2(10, topY - 50 * i), outfit.Value);
+                addInput(key, new Vector2(10, topY - (LogicFlows.LogicFlows.SmallUI ? 25 : 50) * i), outfit.Value);
                 i++;
             }
             return graphs[outfit.Value];
@@ -396,8 +395,8 @@ namespace AmazingNewAccessoryLogic
             else
             {
                 LogicFlowNode_OR or = addGate(outfit, 2) as LogicFlowNode_OR;
-                or.setInput(0, inId1);
-                or.setInput(1, inId2);
+                or.SetInput(0, inId1);
+                or.SetInput(1, inId2);
                 return or;
             }
         }
@@ -423,8 +422,8 @@ namespace AmazingNewAccessoryLogic
             else
             {
                 LogicFlowNode_AND and = addGate(outfit, 1) as LogicFlowNode_AND;
-                and.setInput(0, inId1);
-                and.setInput(1, inId2);
+                and.SetInput(0, inId1);
+                and.SetInput(1, inId2);
                 return and;
             }
         }
@@ -439,7 +438,7 @@ namespace AmazingNewAccessoryLogic
             else
             {
                 LogicFlowNode_NOT not = addGate(outfit, 0) as LogicFlowNode_NOT;
-                not.setInput(0, inId);
+                not.SetInput(0, inId);
                 return not;
             }
         }
@@ -644,6 +643,13 @@ namespace AmazingNewAccessoryLogic
                 GUIStyle headerTextStyle = new GUIStyle(GUI.skin.label);
                 headerTextStyle.normal.textColor = Color.black;
                 headerTextStyle.alignment = TextAnchor.MiddleLeft;
+                if (LogicFlows.LogicFlows.SmallUI)
+                {
+                    headerTextStyle.fontSize = 10;
+                    headerTextStyle.padding.top = 0;
+                    headerTextStyle.padding.bottom = 0;
+                    headerTextStyle.padding.left = 1;
+                }
 
                 GUI.DrawTexture(new Rect(0, 0, Screen.width, Screen.height), rTex);
 
@@ -652,8 +658,8 @@ namespace AmazingNewAccessoryLogic
                 boxSize += 30;
 #endif
 
-                GUI.Label(new Rect(screenToGUI(lfg.rect.position + new Vector2(10, lfg.rect.height + 35)), new Vector2(250, 25)), $"AmazingNewAccessoryLogic v{AmazingNewAccessoryLogic.Version}", headerTextStyle);
-                if (GUI.Button(new Rect(screenToGUI(lfg.rect.position + lfg.rect.size + new Vector2(-65, 32)), new Vector2(60, 20)), "Close"))
+                GUI.Label(new Rect(screenToGUI(lfg.rect.position + new Vector2(10, lfg.rect.height + (LogicFlows.LogicFlows.SmallUI ? 24 : 35))), new Vector2(250, 25)), $"AmazingNewAccessoryLogic v{AmazingNewAccessoryLogic.Version}", headerTextStyle);
+                if (GUI.Button(new Rect(screenToGUI(lfg.rect.position + lfg.rect.size + new Vector2(-65, (LogicFlows.LogicFlows.SmallUI ? 18 : 32))), new Vector2(60, (LogicFlows.LogicFlows.SmallUI ? 15 : 20))), "Close"))
                 {
                     this.hide();
                 }
@@ -769,7 +775,7 @@ namespace AmazingNewAccessoryLogic
                         case 1:
                         case 2:
                         case 3:
-                            output.setInput(0, connectInputs(statesThatTurnTheOutputOn, clothingSlot, outfit, graph).index);
+                            output.SetInput(0, connectInputs(statesThatTurnTheOutputOn, clothingSlot, outfit, graph).index);
                             break;
                         case 4:
                             break;
@@ -813,11 +819,11 @@ namespace AmazingNewAccessoryLogic
                                     {
                                         if (node.inputAt(0) != null && node.inputAt(0).index == output.index)
                                         {
-                                            node.setInput(0, output.inputAt(1).index);
+                                            node.SetInput(0, output.inputAt(1).index);
                                         }
                                         else if (node.inputAt(1) != null && node.inputAt(1).index == output.index)
                                         {
-                                            node.setInput(1, output.inputAt(1).index);
+                                            node.SetInput(1, output.inputAt(1).index);
                                         }
                                     });
                                     graph.RemoveNode(output.index);
@@ -833,13 +839,13 @@ namespace AmazingNewAccessoryLogic
                                 {
                                     LogicFlowNode_OR or = addGate(outfit, 2) as LogicFlowNode_OR;
                                     or.setPosition(and.rect.position + new Vector2(75, 0));
-                                    or.setInput(1, and.index);
-                                    output.setInput(0, or.index);
+                                    or.SetInput(1, and.index);
+                                    output.SetInput(0, or.index);
                                     output = or;
                                 }
                                 else
                                 {
-                                    output.setInput(0, and.index);
+                                    output.SetInput(0, and.index);
                                 }
                                 break;
                             case 4:
@@ -848,13 +854,13 @@ namespace AmazingNewAccessoryLogic
                                     LogicFlowNode input = getInput(A.ClothingSlot, A.ClothingState, outfit);
                                     LogicFlowNode_OR or = addGate(outfit, 2) as LogicFlowNode_OR;
                                     or.setPosition(input.rect.position + new Vector2(75, 0));
-                                    or.setInput(1, input.index);
-                                    output.setInput(0, or.index);
+                                    or.SetInput(1, input.index);
+                                    output.SetInput(0, or.index);
                                     output = or;
                                 }
                                 else
                                 {
-                                    output.setInput(0, getInput(A.ClothingSlot, A.ClothingState, outfit).index);
+                                    output.SetInput(0, getInput(A.ClothingSlot, A.ClothingState, outfit).index);
                                 }
                                 break;
                         }
