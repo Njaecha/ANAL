@@ -53,7 +53,7 @@ namespace AmazingNewAccessoryLogic
         {
             SerialisedNode sn = new SerialisedNode();
             sn.type = NodeType.Input;
-            sn.postion = input.rect.position;
+            sn.postion = input.getPosition();
             sn.index = input.index;
             sn.enabled = input.enabled;
             sn.data = new List<int>() { input.index };
@@ -63,7 +63,7 @@ namespace AmazingNewAccessoryLogic
         {
             SerialisedNode sn = new SerialisedNode();
             sn.type = NodeType.Output;
-            sn.postion = output.rect.position;
+            sn.postion = output.getPosition();
             sn.index = output.index;
             sn.enabled = output.enabled;
             sn.data = new List<int>() { 
@@ -91,7 +91,7 @@ namespace AmazingNewAccessoryLogic
                     sn.type = NodeType.Gate_XOR;
                     break;
             }
-            sn.postion = gate.rect.position;
+            sn.postion = gate.getPosition();
             sn.index = gate.index;
             sn.enabled = gate.enabled;
             List<int> inputs = new List<int>();

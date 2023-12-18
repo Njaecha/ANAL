@@ -11,6 +11,7 @@ using KKAPI.Maker.UI.Sidebar;
 using UniRx;
 using KKAPI.Chara;
 using IllusionFixes;
+using BepInEx.Configuration;
 
 namespace AmazingNewAccessoryLogic
 {
@@ -29,6 +30,8 @@ namespace AmazingNewAccessoryLogic
 
         public static AmazingNewAccessoryLogic Instance;
 
+        public static ConfigEntry<float> UIScaleModifier;
+
         void Awake()
         {
             MakerAPI.MakerBaseLoaded += createSideBarToggle;
@@ -40,6 +43,8 @@ namespace AmazingNewAccessoryLogic
 
             AccessoriesApi.AccessoryTransferred += AccessoryTransferred;
             AccessoriesApi.AccessoriesCopied += AccessoriesCopied;
+
+            UIScaleModifier = Config.Bind("UI", "UI Scale Factor", Screen.height <= 1080 ? 1.3f : 1f, new ConfigDescription("Additional Scale to apply to the UI", new AcceptableValueRange<float>(0.5f, 2f)));
         }
 
         private void AccessoriesCopied(object sender, AccessoryCopyEventArgs e)
@@ -61,7 +66,10 @@ namespace AmazingNewAccessoryLogic
 
         private void showGraphInMaker(bool b)
         {
-            if (b) MakerAPI.GetCharacterControl()?.GetComponent<AnalCharaController>()?.show();
+            if (b)
+            {
+                MakerAPI.GetCharacterControl()?.GetComponent<AnalCharaController>()?.show(Input.GetKey(KeyCode.LeftShift));
+            }
             else MakerAPI.GetCharacterControl()?.GetComponent<AnalCharaController>()?.hide();
         }
 

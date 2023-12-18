@@ -18,7 +18,7 @@ namespace AmazingNewAccessoryLogic
         public static SerialisedGraph Serialise(LogicFlowGraph graph)
         {
             SerialisedGraph sg = new SerialisedGraph();
-            sg.size = graph.rect.size;
+            sg.size = graph.getSize();
             List<SerialisedNode> nodeList = new List<SerialisedNode>();
             foreach (LogicFlowNode n in graph.getAllNodes())
             {
