@@ -230,7 +230,7 @@ namespace AmazingNewAccessoryLogic
         {
             if (!outfit.HasValue) outfit = ChaControl.fileStatus.coordinateType;
             if (graphs == null) graphs = new Dictionary<int, LogicFlowGraph>();
-            graphs[outfit.Value] = new LogicFlowGraph(new Rect(new Vector2(100,10), new Vector2(500, 900) * (LogicFlows.LogicFlows.SmallUI ? 0.5f : 1f)));
+            graphs[outfit.Value] = new LogicFlowGraph(new Rect(new Vector2(100,10), new Vector2(500, 900)));
             if (activeSlots == null) activeSlots = new Dictionary<int, List<int>>();
             activeSlots[outfit.Value] = new List<int>();
             float topY = graphs[outfit.Value].rect.height;
@@ -238,7 +238,7 @@ namespace AmazingNewAccessoryLogic
             int i = 1;
             foreach(InputKey key in Enum.GetValues(typeof(InputKey)))
             {
-                addInput(key, new Vector2(10, topY - (LogicFlows.LogicFlows.SmallUI ? 25 : 50) * i), outfit.Value);
+                addInput(key, new Vector2(10, topY - 50 * i), outfit.Value);
                 i++;
             }
             return graphs[outfit.Value];
@@ -643,9 +643,9 @@ namespace AmazingNewAccessoryLogic
                 GUIStyle headerTextStyle = new GUIStyle(GUI.skin.label);
                 headerTextStyle.normal.textColor = Color.black;
                 headerTextStyle.alignment = TextAnchor.MiddleLeft;
-                if (LogicFlows.LogicFlows.SmallUI)
+                if (LogicFlows.LogicFlows.UIScale < 1f)
                 {
-                    headerTextStyle.fontSize = 10;
+                    headerTextStyle.fontSize = (int)(headerTextStyle.fontSize * LogicFlows.LogicFlows.UIScale);
                     headerTextStyle.padding.top = 0;
                     headerTextStyle.padding.bottom = 0;
                     headerTextStyle.padding.left = 1;
@@ -658,8 +658,8 @@ namespace AmazingNewAccessoryLogic
                 boxSize += 30;
 #endif
 
-                GUI.Label(new Rect(screenToGUI(lfg.rect.position + new Vector2(10, lfg.rect.height + (LogicFlows.LogicFlows.SmallUI ? 24 : 35))), new Vector2(250, 25)), $"AmazingNewAccessoryLogic v{AmazingNewAccessoryLogic.Version}", headerTextStyle);
-                if (GUI.Button(new Rect(screenToGUI(lfg.rect.position + lfg.rect.size + new Vector2(-65, (LogicFlows.LogicFlows.SmallUI ? 18 : 32))), new Vector2(60, (LogicFlows.LogicFlows.SmallUI ? 15 : 20))), "Close"))
+                GUI.Label(new Rect(screenToGUI(lfg.rect.position + new Vector2(10, lfg.rect.height + (LogicFlows.LogicFlows.UIScale * 20) + 15)), new Vector2(250, 25)), $"AmazingNewAccessoryLogic v{AmazingNewAccessoryLogic.Version}", headerTextStyle);
+                if (GUI.Button(new Rect(screenToGUI(lfg.rect.position + lfg.rect.size + new Vector2(-65, (LogicFlows.LogicFlows.UIScale * 28) + 4)), new Vector2(60, (LogicFlows.LogicFlows.UIScale * 10) +10)), "Close"))
                 {
                     this.hide();
                 }
