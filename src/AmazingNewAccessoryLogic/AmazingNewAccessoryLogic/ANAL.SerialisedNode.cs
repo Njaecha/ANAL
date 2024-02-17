@@ -30,6 +30,9 @@ namespace AmazingNewAccessoryLogic
         [Key("Data")]
         public List<int> data { get; set; }
 
+        [Key("Advanced Data")]
+        public List<object> data2 { get; set; } = null;
+
         public enum NodeType
         {
             Gate_NOT,
@@ -38,28 +41,36 @@ namespace AmazingNewAccessoryLogic
             Gate_XOR,
             Input,
             Output,
-            Custom
+            AdvancedInput
         }
         
-        public static SerialisedNode Serialise(LogicFlowNode node)
+        public static SerialisedNode Serialise(LogicFlowNode node, LogicFlowGraph graph)
         {
-            if (node is LogicFlowGate g) return fromGate(g);
-            else if (node is LogicFlowOutput n) return fromOutput(n);
-            else if (node is LogicFlowInput i) return fromInput(i);
+            if (node is LogicFlowGate g) return fromGate(g, graph);
+            else if (node is LogicFlowOutput n) return fromOutput(n, graph);
+            else if (node is LogicFlowInput i) return fromInput(i, graph);
             else return null;
         }
 
-        public static SerialisedNode fromInput(LogicFlowInput input)
+        public static SerialisedNode fromInput(LogicFlowInput input, LogicFlowGraph graph)
         {
             SerialisedNode sn = new SerialisedNode();
-            sn.type = NodeType.Input;
+            if (AnalCharaController.serialisationData.ContainsKey(graph) && AnalCharaController.serialisationData[graph].ContainsKey(input.index))
+            {
+                sn.data2 = AnalCharaController.serialisationData[graph][input.index];
+                sn.type = NodeType.AdvancedInput;
+            }
+            else
+            {
+                sn.type = NodeType.Input;
+            }
             sn.postion = input.getPosition();
             sn.index = input.index;
             sn.enabled = input.enabled;
             sn.data = new List<int>() { input.index };
             return sn;
         }
-        public static SerialisedNode fromOutput(LogicFlowOutput output)
+        public static SerialisedNode fromOutput(LogicFlowOutput output, LogicFlowGraph graph)
         {
             SerialisedNode sn = new SerialisedNode();
             sn.type = NodeType.Output;
@@ -73,7 +84,7 @@ namespace AmazingNewAccessoryLogic
             return sn;
         }
 
-        public static SerialisedNode fromGate(LogicFlowGate gate)
+        public static SerialisedNode fromGate(LogicFlowGate gate, LogicFlowGraph graph)
         {
             SerialisedNode sn = new SerialisedNode();
             switch (gate)

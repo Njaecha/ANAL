@@ -9,12 +9,19 @@ using MessagePack;
 using LogicFlows;
 using UnityEngine;
 using KKAPI.Maker;
+using RuntimeUnityEditor;
+using static Illusion.Component.UI.MouseButtonCheck;
+using static UnityEngine.GUI;
+using JetBrains.Annotations;
+using static ADV.Info;
 
 namespace AmazingNewAccessoryLogic
 {
     class AnalCharaController : CharaCustomFunctionController
     {
         public LogicFlowGraph lfg { get => getCurrentGraph(); private set => setCurrentGraph(value); }
+
+        internal static Dictionary<LogicFlowGraph, Dictionary<int, List<object>>> serialisationData = new Dictionary<LogicFlowGraph, Dictionary<int, List<object>>>();
 
         private Dictionary<int, LogicFlowGraph> graphs = new Dictionary<int, LogicFlowGraph>();
         private Dictionary<int, List<int>> activeSlots = new Dictionary<int, List<int>>();
@@ -28,8 +35,9 @@ namespace AmazingNewAccessoryLogic
 
         private byte[] oldClothStates;
 
-        private string slotInputText = "1";
+        
 
+        #region GameEvetns
         protected override void OnCardBeingSaved(GameMode currentGameMode)
         {
             if (graphs.Count == 0) return;
@@ -154,16 +162,17 @@ namespace AmazingNewAccessoryLogic
                 if (sOutput == null) continue;
                 List<int> iTree = sOutput.getInputTree();
                 LogicFlowOutput dOutput = (LogicFlowOutput)graphs[destinationOutfit].getNodeAt(1000000 + slot);
-                if (dOutput == null) deserialiseNode(destinationOutfit, SerialisedNode.Serialise(graphs[sourceOutift].getNodeAt(1000000 + slot)));
+                if (dOutput == null) deserialiseNode(destinationOutfit, SerialisedNode.Serialise(graphs[sourceOutift].getNodeAt(1000000 + slot), graphs[sourceOutift]));
                 foreach(int index in iTree)
                 {
                     LogicFlowNode node = graphs[destinationOutfit].getNodeAt(index);
-                    if (node == null) deserialiseNode(destinationOutfit, SerialisedNode.Serialise(graphs[sourceOutift].getNodeAt(index)));
+                    if (node == null) deserialiseNode(destinationOutfit, SerialisedNode.Serialise(graphs[sourceOutift].getNodeAt(index), graphs[sourceOutift]));
                 }
             }
             graphs[destinationOutfit].isLoading = false;
         }
-
+        #endregion
+        #region Deserialisation
         private void deserialiseGraph(int outfit, SerialisedGraph graph)
         {
             graphs.Add(outfit, new LogicFlowGraph(new Rect(new Vector2(200,200), graph.size)));
@@ -204,6 +213,9 @@ namespace AmazingNewAccessoryLogic
                     node = addOutput(sNode.data[0], outfit);
                     node.SetInput(sNode.data[1], 0);
                     break;
+                case SerialisedNode.NodeType.AdvancedInput:
+                    node = deserialiseAdvancedInputNode(outfit, sNode, (AdvancedInputType)sNode.data2[0]);
+                    break;
             }
             if (node != null)
             {
@@ -212,6 +224,37 @@ namespace AmazingNewAccessoryLogic
             }
         }
 
+        private LogicFlowNode deserialiseAdvancedInputNode(int outfit, SerialisedNode sNode, AdvancedInputType advancedInputType)
+        {
+            LogicFlowNode node = null;
+            switch (advancedInputType)
+            {
+                case AdvancedInputType.HandPtn:
+                    node = addAdvancedInputHands((bool)sNode.data2[1], (bool)sNode.data2[2], (int)sNode.data2[3], sNode.postion, outfit, sNode.index);
+                    break;
+                case AdvancedInputType.EyesOpn:
+                    node = addAdvancedInputEyeThreshold((bool)sNode.data2[1], (float)sNode.data2[2], sNode.postion, outfit, sNode.index);
+                    break;
+                case AdvancedInputType.MouthOpn:
+                    node = addAdvancedInputMouthThreshold((bool)sNode.data2[1], (float)sNode.data2[2], sNode.postion, outfit, sNode.index);
+                    break;
+                case AdvancedInputType.EyesPtn:
+                    node = addAdvancedInputEyePattern((int)sNode.data2[1], sNode.postion, outfit, sNode.index);
+                    break;
+                case AdvancedInputType.MouthPtn:
+                    node = addAdvancedInputMouthPattern((int)sNode.data2[1],sNode.postion, outfit, sNode.index);
+                    break;
+                case AdvancedInputType.EyebrowPtn:
+                    node = addAdvancedInputEyebrowPattern((int)sNode.data2[1],sNode.postion, outfit,sNode.index);
+                    break;
+                case AdvancedInputType.Accessory:
+                    node = addAdvanedInputAccessory((int)sNode.data2[1], sNode.postion, outfit, sNode.index);
+                    break;
+            }
+            return node;
+        }
+        #endregion
+        #region Graph Construction
         private LogicFlowGraph getCurrentGraph()
         {
             if (!graphs.ContainsKey(ChaControl.fileStatus.coordinateType)) return null;
@@ -226,7 +269,7 @@ namespace AmazingNewAccessoryLogic
             else activeSlots.Add(ChaControl.fileStatus.coordinateType, new List<int>());
         }
 
-        private LogicFlowGraph createGraph(int? outfit = null)
+        internal LogicFlowGraph createGraph(int? outfit = null)
         {
             if (!outfit.HasValue) outfit = ChaControl.fileStatus.coordinateType;
             if (graphs == null) graphs = new Dictionary<int, LogicFlowGraph>();
@@ -244,11 +287,11 @@ namespace AmazingNewAccessoryLogic
             return graphs[outfit.Value];
         }
 
-        public LogicFlowInput addInput(InputKey key, Vector2 pos, int outift = -1)
+        internal LogicFlowInput addInput(InputKey key, Vector2 pos, int? outfit = null)
         {
             LogicFlowGraph g;
-            if (outift == -1) g = lfg;
-            else g = graphs[outift];
+            if (!outfit.HasValue) g = lfg;
+            else g = graphs[outfit.Value];
             if (g == null) return null;
 
             LogicFlowInput node = null;
@@ -326,6 +369,14 @@ namespace AmazingNewAccessoryLogic
             return node;
         }
 
+        /// <summary>
+        /// Returns the LogicFlowNode that is the passed ClothingSlot and ClothingState.
+        /// If the State does not have a default Input-Node automatically constructs a MetaInput. 
+        /// </summary>
+        /// <param name="clothingSlot"></param>
+        /// <param name="clothingState"></param>
+        /// <param name="outfit"></param>
+        /// <returns></returns>
         public LogicFlowNode getInput(int clothingSlot, int clothingState, int? outfit = null)
         {
             if (!outfit.HasValue) outfit = ChaControl.fileStatus.coordinateType;
@@ -337,6 +388,7 @@ namespace AmazingNewAccessoryLogic
             }
             return constructMetaInput(clothingSlot, outfit);
         }
+
         /// <summary>
         /// Auto constructs a Node which outputs if one or the other state of a clothingSlot is active
         /// </summary>
@@ -374,7 +426,13 @@ namespace AmazingNewAccessoryLogic
             return not;
         }
 
-
+        /// <summary>
+        /// Auto constructs a Or gate connected to the passed inputs
+        /// </summary>
+        /// <param name="inId1"></param>
+        /// <param name="inId2"></param>
+        /// <param name="outfit"></param>
+        /// <returns></returns>
         private LogicFlowNode_OR addOrGateForInputs(int inId1, int inId2, int outfit)
         {
             if (!graphs.ContainsKey(outfit)) return null;
@@ -401,7 +459,13 @@ namespace AmazingNewAccessoryLogic
             }
         }
 
-
+        /// <summary>
+        /// Auto constructs a And gate connected to the passed inputs
+        /// </summary>
+        /// <param name="inId1"></param>
+        /// <param name="inId2"></param>
+        /// <param name="outfit"></param>
+        /// <returns></returns>
         private LogicFlowNode_AND addAndGateForInputs(int inId1, int inId2, int outfit)
         {
             if (!graphs.ContainsKey(outfit)) return null;
@@ -428,7 +492,12 @@ namespace AmazingNewAccessoryLogic
             }
         }
 
-
+        /// <summary>
+        /// Auto constructs a Not gate connected to the passed input
+        /// </summary>
+        /// <param name="inId"></param>
+        /// <param name="outfit"></param>
+        /// <returns></returns>
         private LogicFlowNode_NOT addNotForInput(int inId, int outfit)
         {
             if (!graphs.ContainsKey(outfit)) return null;
@@ -443,7 +512,240 @@ namespace AmazingNewAccessoryLogic
             }
         }
 
+        /// <summary>
+        /// Autoconstructs nodes that give an output that turns on for the given states on the given clothingslot.
+        /// </summary>
+        /// <param name="statesThatTurnTheOutputOn">List of States (0-3) that should turn the output on.</param>
+        /// <param name="clothingSlot"></param>
+        /// <param name="outfit"></param>
+        /// <param name="graph"></param>
+        /// <returns></returns>
+        private LogicFlowNode connectInputs(List<int> statesThatTurnTheOutputOn, int clothingSlot, int outfit, LogicFlowGraph graph)
+        {
+            switch (statesThatTurnTheOutputOn.Count)
+            {
+                case 0:
+                    return null;
+                case 1:
+                    LogicFlowNode input = getInput(clothingSlot, statesThatTurnTheOutputOn[0], outfit);
+                    return input;
+                case 2:
+                    LogicFlowNode input1 = getInput(clothingSlot, statesThatTurnTheOutputOn[0], outfit);
+                    LogicFlowNode input2 = getInput(clothingSlot, statesThatTurnTheOutputOn[1], outfit);
+                    LogicFlowNode_OR or0 = addOrGateForInputs(input1.index, input2.index, outfit);
+                    or0.setPosition(input1.getPosition() + new Vector2(75, 0));
+                    return or0;
+                case 3:
+                    LogicFlowNode input_1 = getInput(clothingSlot, statesThatTurnTheOutputOn[0], outfit);
+                    LogicFlowNode input_2 = getInput(clothingSlot, statesThatTurnTheOutputOn[1], outfit);
+                    LogicFlowNode input_3 = getInput(clothingSlot, statesThatTurnTheOutputOn[2], outfit);
 
+                    LogicFlowNode_OR or1 = addOrGateForInputs(input_1.index, input_2.index, outfit);
+                    LogicFlowNode_OR or2 = addOrGateForInputs(or1.index, input_3.index, outfit);
+
+                    or1.setPosition(input_1.getPosition() + new Vector2(75, 0));
+
+                    or2.setPosition(or1.getPosition() + new Vector2(75, 0));
+                    return or2;
+                case 4:
+                    return null;
+                default:
+                    return null;
+            }
+        }
+
+        #region Advnaced Inputs
+
+        public LogicFlowNode addAdvanedInputAccessory(int slot, Vector2 pos, int? outfit = null, int? index = null)
+        {
+            LogicFlowGraph g;
+            if (!outfit.HasValue) g = lfg;
+            else g = graphs[outfit.Value];
+            if (g == null) return null;
+
+            LogicFlowInput_Func node = new LogicFlowInput_Func(() => ChaControl.fileStatus.showAccessory[slot], g, index) { label = $"Slot {slot+1}" };
+
+            if (node != null)
+            {
+                node.setPosition(pos);
+                node.toolTipText = $"Accessory Slot {slot+1}";
+                node.deletable = true;
+            }
+
+            if (!serialisationData.ContainsKey(g)) serialisationData.Add(g, new Dictionary<int, List<object>>());
+            serialisationData[g].Add(node.index, new List<object> { AdvancedInputType.Accessory, slot });
+
+            return node;
+        }
+
+        public LogicFlowNode addAdvancedInputHands(bool leftright, bool anim, int pattern, Vector2 pos, int? outfit = null, int? index = null)
+        {
+            LogicFlowGraph g;
+            if (!outfit.HasValue) g = lfg;
+            else g = graphs[outfit.Value];
+            if (g == null) return null;
+
+            int sideKey = leftright ? 1 : 0;
+            LogicFlowInput_Func node;
+            if (anim)
+            {
+                node = new LogicFlowInput_Func(() => !ChaControl.GetEnableShapeHand(sideKey), g, index) { label = leftright ? "R Hand" : "L Hand" };
+            }
+            else
+            {
+                node = new LogicFlowInput_Func(() => ChaControl.GetEnableShapeHand(sideKey) && ChaControl.GetShapeHandIndex(sideKey, 0) == pattern, g, index) { label = leftright ? "Hand-R" : "Hand-L" };
+            }
+
+            if (node != null)
+            {
+                string side = leftright ? "right" : "left";
+                string option = anim ? "Animation" : $"Pattern {pattern+1}";
+
+                node.setPosition(pos);
+                node.toolTipText = $"Hand: {side} - {option}";
+                node.deletable = true;
+            }
+
+            if (!serialisationData.ContainsKey(g)) serialisationData.Add(g, new Dictionary<int, List<object>>());
+            serialisationData[g].Add(node.index, new List<object> { AdvancedInputType.HandPtn, leftright, anim, pattern });
+
+            return node;
+        }
+
+        public LogicFlowNode addAdvancedInputEyeThreshold(bool moreThan, float threshold, Vector2 pos, int? outfit = null, int? index = null)
+        {
+            LogicFlowGraph g;
+            if (!outfit.HasValue) g = lfg;
+            else g = graphs[outfit.Value];
+            if (g == null) return null;
+
+            LogicFlowInput_Func node;
+            if (moreThan)
+            {
+                node = new LogicFlowInput_Func(() => ChaControl.GetEyesOpenMax() > threshold, g, index) { label = "EyeOpen" };
+            }
+            else
+            {
+                node = new LogicFlowInput_Func(() => ChaControl.GetEyesOpenMax() <= threshold, g, index) { label = "EyeOpen" };
+            }
+
+            if (node != null)
+            {
+                string comp = moreThan ? "More than" : "Less or equal to";
+                string value = threshold.ToString("0.00");
+
+                node.setPosition(pos);
+                node.toolTipText = $"Eye Openess: {comp} {value}";
+                node.deletable = true;
+            }
+
+            if (!serialisationData.ContainsKey(g)) serialisationData.Add(g, new Dictionary<int, List<object>>());
+            serialisationData[g].Add(node.index, new List<object> { AdvancedInputType.EyesOpn, moreThan, threshold });
+
+            return node;
+        }
+
+        public LogicFlowNode addAdvancedInputEyePattern(int pattern, Vector2 pos, int? outfit = null, int? index = null)
+        {
+            LogicFlowGraph g;
+            if (!outfit.HasValue) g = lfg;
+            else g = graphs[outfit.Value];
+            if (g == null) return null;
+
+            LogicFlowInput_Func node = new LogicFlowInput_Func(() => ChaControl.GetEyesPtn() == pattern, g, index) { label = "Eye Ptn" };
+
+            if (node != null)
+            {
+                node.setPosition(pos);
+                node.toolTipText = $"Eye Pattern: {pattern+1}";
+                node.deletable = true;
+            }
+
+            if (!serialisationData.ContainsKey(g)) serialisationData.Add(g, new Dictionary<int, List<object>>());
+            serialisationData[g].Add(node.index, new List<object> { AdvancedInputType.EyesPtn, pattern });
+
+            return node;
+        }
+
+        public LogicFlowNode addAdvancedInputMouthThreshold(bool moreThan, float threshold, Vector2 pos, int? outfit = null, int? index = null)
+        {
+            LogicFlowGraph g;
+            if (!outfit.HasValue) g = lfg;
+            else g = graphs[outfit.Value];
+            if (g == null) return null;
+
+            LogicFlowInput_Func node;
+            if (moreThan)
+            {
+                node = new LogicFlowInput_Func(() => ChaControl.GetMouthOpenMax() > threshold, g, index) { label = "MouthOpn" };
+            }
+            else
+            {
+                node = new LogicFlowInput_Func(() => ChaControl.GetMouthOpenMax() <= threshold, g, index) { label = "MouthOpn" };
+            }
+
+            if (node != null)
+            {
+                string comp = moreThan ? "More than" : "Less or equal to";
+                string value = threshold.ToString("0.00");
+
+                node.setPosition(pos);
+                node.toolTipText = $"Mouth Openess: {comp} {value}";
+                node.deletable = true;
+            }
+
+            if (!serialisationData.ContainsKey(g)) serialisationData.Add(g, new Dictionary<int, List<object>>());
+            serialisationData[g].Add(node.index, new List<object> { AdvancedInputType.MouthOpn, moreThan, threshold });
+
+            return node;
+        }
+
+        public LogicFlowNode addAdvancedInputMouthPattern(int pattern, Vector2 pos, int? outfit = null, int? index = null)
+        {
+            LogicFlowGraph g;
+            if (!outfit.HasValue) g = lfg;
+            else g = graphs[outfit.Value];
+            if (g == null) return null;
+
+            LogicFlowInput_Func node = new LogicFlowInput_Func(() => ChaControl.GetMouthPtn() == pattern, g, index) { label = "MouthPtn" };
+
+            if (node != null)
+            {
+                node.setPosition(pos);
+                node.toolTipText = $"Mouth Pattern: {pattern+1}";
+                node.deletable = true;
+            }
+
+            if (!serialisationData.ContainsKey(g)) serialisationData.Add(g, new Dictionary<int, List<object>>());
+            serialisationData[g].Add(node.index, new List<object> { AdvancedInputType.MouthPtn, pattern });
+
+            return node;
+        }
+
+        public LogicFlowNode addAdvancedInputEyebrowPattern(int pattern, Vector2 pos, int? outfit = null, int? index = null)
+        {
+            LogicFlowGraph g;
+            if (!outfit.HasValue) g = lfg;
+            else g = graphs[outfit.Value];
+            if (g == null) return null;
+
+            LogicFlowInput_Func node = new LogicFlowInput_Func(() => ChaControl.GetEyebrowPtn() == pattern, g, index) { label = "Eyebrow" };
+
+            if (node != null)
+            {
+                node.setPosition(pos);
+                node.toolTipText = $"Eyebrow Pattern: {pattern + 1}";
+                node.deletable = true;
+            }
+
+            if (!serialisationData.ContainsKey(g)) serialisationData.Add(g, new Dictionary<int, List<object>>());
+            serialisationData[g].Add(node.index, new List<object> { AdvancedInputType.EyebrowPtn, pattern });
+
+            return node;
+        }
+
+
+        #endregion
         /// <summary>
         /// Adds a ouput node for an accessory slot 
         /// </summary>
@@ -455,6 +757,7 @@ namespace AmazingNewAccessoryLogic
 
             if (graphs.ContainsKey(outfit.Value))
             {
+                if (activeSlots.ContainsKey(outfit.Value) && activeSlots[outfit.Value].Contains(slot)) return null;
                 activeSlots[outfit.Value].Add(slot);
                 LogicFlowOutput output = new LogicFlowOutput_Action((value) => setAccessoryState(slot, value), graphs[outfit.Value], key: 1000000 + slot) { label = $"Slot {slot + 1}", toolTipText = null };
                 output.setPosition(new Vector2(
@@ -525,7 +828,8 @@ namespace AmazingNewAccessoryLogic
             }
             return null;
         }
-
+        #endregion
+        #region General Methods
 
         public bool getClothState(int clothType, byte stateValue)
         {
@@ -537,7 +841,7 @@ namespace AmazingNewAccessoryLogic
             ChaControl.fileStatus.showAccessory[accessorySlot] = stateValue;
         }
 
-        public void show(bool resetPostion)
+        public void Show(bool resetPostion)
         {
             if (lfg == null) createGraph();
             displayGraph = true;
@@ -555,10 +859,10 @@ namespace AmazingNewAccessoryLogic
             }
         }
 
-        public void hide()
+        public void Hide()
         {
             displayGraph = false;
-            if (MakerAPI.InsideAndLoaded) AmazingNewAccessoryLogic.Instance.toggle.Value = false;
+            if (MakerAPI.InsideAndLoaded) AmazingNewAccessoryLogic.SidebarToggle.Value = false;
             AnalCameraComponent acc = rCam.GetComponent<AnalCameraComponent>();
             if (acc != null) acc.OnPostRenderEvent -= postRenderEvent;
         }
@@ -603,7 +907,7 @@ namespace AmazingNewAccessoryLogic
         {
             if (lfg == null)
             {
-                if (MakerAPI.InsideAndLoaded) AmazingNewAccessoryLogic.Instance.toggle.Value = false;
+                if (MakerAPI.InsideAndLoaded) AmazingNewAccessoryLogic.SidebarToggle.Value = false;
                 return;
             }
             if (displayGraph)
@@ -641,9 +945,14 @@ namespace AmazingNewAccessoryLogic
         private bool fullCharacter = false;
         void OnGUI()
         {
+            
             if (lfg == null) return;
             if (displayGraph)
             {
+                if (showAdvancedInputWindow)
+                {
+                    advancedInputWindowRect = GUI.Window(2233511, advancedInputWindowRect, CustomInputWindowFunction, "", KKAPI.Utilities.IMGUIUtils.SolidBackgroundGuiSkin.window);
+                }
                 GUIStyle headerTextStyle = new GUIStyle(GUI.skin.label);
                 headerTextStyle.normal.textColor = Color.black;
                 headerTextStyle.alignment = TextAnchor.MiddleLeft;
@@ -654,6 +963,7 @@ namespace AmazingNewAccessoryLogic
                     headerTextStyle.padding.bottom = 0;
                     headerTextStyle.padding.left = 1;
                 }
+                
 
                 GUI.DrawTexture(new Rect(0, 0, Screen.width, Screen.height), rTex);
 
@@ -665,7 +975,7 @@ namespace AmazingNewAccessoryLogic
                 GUI.Label(new Rect(screenToGUI(lfg.positionUI + new Vector2(10, lfg.sizeUI.y + (lfg.getUIScale() * 20) + 15)), new Vector2(250, 25)), $"AmazingNewAccessoryLogic v{AmazingNewAccessoryLogic.Version}", headerTextStyle);
                 if (GUI.Button(new Rect(screenToGUI(lfg.positionUI + lfg.sizeUI + new Vector2(-65, (lfg.getUIScale() * 28) + 4)), new Vector2(60, (lfg.getUIScale() * 10) +10)), "Close"))
                 {
-                    this.hide();
+                    this.Hide();
                 }
 
                 GUI.Box(new Rect(screenToGUI(lfg.positionUI + lfg.sizeUI + new Vector2(5, 0)), new Vector2(130, boxSize)), "");
@@ -689,26 +999,9 @@ namespace AmazingNewAccessoryLogic
                 {
                     addGate(3);
                 }
-                GUI.Label(new Rect(screenToGUI(lfg.positionUI + lfg.sizeUI + new Vector2(15, i-=35)), new Vector2(80, 20)), "Acc-Slot:");
-                slotInputText = GUI.TextField(new Rect(screenToGUI(lfg.positionUI + lfg.sizeUI + new Vector2(90, i)), new Vector2(40, 20)), slotInputText);
-                if (GUI.Button(new Rect(screenToGUI(lfg.positionUI + lfg.sizeUI + new Vector2(10, i-=25)), new Vector2(120, 30)), "Add Output"))
+                if (GUI.Button(new Rect(screenToGUI(lfg.positionUI + lfg.sizeUI + new Vector2(10, i-=35)), new Vector2(120, 30)), "Advanced Inputs"))
                 {
-                    
-                    try
-                    {
-                        AmazingNewAccessoryLogic.Logger.LogInfo(slotInputText);
-                        int slotInput = int.Parse(slotInputText);
-                        if (!(slotInput - 1 >= 0)) 
-                            AmazingNewAccessoryLogic.Logger.LogMessage("Slot not found. Please enter a slot index with 1 or higher!");
-                        else if (!(slotInput - 1 < ChaControl.fileStatus.showAccessory.Length)) 
-                            AmazingNewAccessoryLogic.Logger.LogMessage($"Slot not found. Please enter a slot index with {ChaControl.fileStatus.showAccessory.Length} or lower!");
-                        else addOutput(slotInput - 1);
-                    }
-                    catch(Exception)
-                    {
-                        AmazingNewAccessoryLogic.Logger.LogMessage($"Could not parse slot. Please enter a valid integer number between 1 and {ChaControl.fileStatus.showAccessory.Length}!");
-                    }
-                    
+                    showAdvancedInputWindow = !showAdvancedInputWindow;
                 }
 #if KKS
 
@@ -728,11 +1021,228 @@ namespace AmazingNewAccessoryLogic
             }
         }
 
+        #region Advanced Input GUI
+        private bool showAdvancedInputWindow = false;
+        private Rect advancedInputWindowRect = new Rect(25, 25, 360, 400);
+        private Vector2 advanceInputWindowScroll = new Vector2();
+        // Hand
+        private bool advinpHandSide = false;
+        private bool advinpHandAnim = false;
+        private string advinpHandPatternText = "1";
+        // Eye Open
+        private float advinpEyeOpenThreshold = 0.5f;
+        private bool advinpEyeOpenThresholdMore = false;
+        // Eye Pattern
+        private string advinpEyePatternText = "1";
+        // Eyebrow pattern
+        private string advinpEyebrowPatternText = "1";
+        // Mouth Open
+        private float advinpMouthOpenThreshold = 0.5f;
+        private bool advinpMouthOpenThresholdMore = false;
+        // Mouth Pattern
+        private string advinpMouthPatternText = "1";
+
+        private void CustomInputWindowFunction(int id)
+        {
+            GUIStyle buttonStyle = new GUIStyle(GUI.skin.button);
+            buttonStyle.padding = new RectOffset(0, 0, 0, 0);
+            buttonStyle.alignment = TextAnchor.MiddleCenter;
+            GUIStyle buttonStyleGreen = new GUIStyle(GUI.skin.button);
+            buttonStyleGreen.normal.textColor = Color.green;
+            GUIStyle buttonStyleRed = new GUIStyle(GUI.skin.button);
+            buttonStyleRed.normal.textColor = Color.red;
+            GUIStyle labelStyle = new GUIStyle(GUI.skin.box);
+            labelStyle.alignment = TextAnchor.MiddleCenter;
+
+            if (GUI.Button(new Rect(advancedInputWindowRect.width - 18, 2, 15, 15), "X", buttonStyle))
+            {
+                showAdvancedInputWindow = false;
+            }
+            GUILayout.BeginArea(new Rect(5, 20, advancedInputWindowRect.width-10, advancedInputWindowRect.height-30));
+            advanceInputWindowScroll = GUILayout.BeginScrollView(advanceInputWindowScroll);
+            GUILayout.BeginVertical();
+            
+
+            #region Hand Pattern Input
+            GUILayout.Label("Hand Pattern", labelStyle);
+            if (GUILayout.Button(advinpHandSide ? "◀ Right ▶" : "◀ Left ▶")) { advinpHandSide = !advinpHandSide; }
+            GUILayout.BeginHorizontal();
+            if (GUILayout.Button(advinpHandAnim ? "◀ Animation ▶" : "◀ Pattern ▶")) { advinpHandAnim = !advinpHandAnim; }
+            if (!advinpHandAnim)
+            {
+                advinpHandPatternText = GUILayout.TextField(advinpHandPatternText, GUILayout.Width(50));
+                if (GUILayout.Button("+", GUILayout.Width(25)) && int.TryParse(advinpHandPatternText, out int handPt1)) advinpHandPatternText = (handPt1+1).ToString();
+                if (GUILayout.Button("-", GUILayout.Width(25)) && int.TryParse(advinpHandPatternText, out int handPt2) && handPt2 > 1) advinpHandPatternText = (handPt2-1).ToString();
+                if (GUILayout.Button("?", GUILayout.Width(25))) advinpHandPatternText = (ChaControl.GetShapeHandIndex(advinpHandSide ? 0 : 1, 0)+1).ToString();
+            }
+            GUILayout.EndHorizontal();
+            bool eval = advinpHandAnim ? !ChaControl.GetEnableShapeHand(advinpHandSide ? 0 : 1) : ChaControl.GetEnableShapeHand(advinpHandSide ? 0 : 1) && int.TryParse(advinpHandPatternText, out int p) && ChaControl.GetShapeHandIndex(advinpHandSide ? 0 : 1, 0) == p - 1;
+            if (GUILayout.Button("Add Hand Pattern Input", eval ? buttonStyleGreen : buttonStyleRed))
+            {
+                int pattern = 1;
+                if (advinpHandAnim || (!advinpHandAnim && int.TryParse(advinpHandPatternText, out pattern))) addAdvancedInputHands(advinpHandSide, advinpHandAnim, pattern - 1, lfg.getSize() / 2);
+            }
+            #endregion
+
+            GUILayout.Space(15);
+
+            #region Eye Open Threshold
+            GUILayout.Label("Eye Openess Threshold", labelStyle);
+            GUILayout.BeginHorizontal();
+            if (GUILayout.Button(advinpEyeOpenThresholdMore ? "◀ More Than ▶" : "◀ Less Than ▶")) { advinpEyeOpenThresholdMore = !advinpEyeOpenThresholdMore; }
+            if (GUILayout.Button("?", GUILayout.Width(25))) advinpEyeOpenThreshold = ChaControl.GetEyesOpenMax();
+            advinpEyeOpenThreshold = GUILayout.HorizontalSlider(advinpEyeOpenThreshold, 0, 1);
+            GUILayout.Label(advinpEyeOpenThreshold.ToString("0.00"), GUILayout.Width(30));
+            GUILayout.EndHorizontal();
+            eval = advinpEyeOpenThresholdMore ? ChaControl.GetEyesOpenMax() > advinpEyeOpenThreshold : ChaControl.GetEyesOpenMax() <= advinpEyeOpenThreshold;
+            if (GUILayout.Button("Add Eye Threshold Input", eval ? buttonStyleGreen : buttonStyleRed))
+            {
+                addAdvancedInputEyeThreshold(advinpEyeOpenThresholdMore, advinpEyeOpenThreshold, lfg.getSize() / 2);
+            }
+            #endregion
+
+            GUILayout.Space(15);
+
+            #region Eye Pattern Input
+            GUILayout.Label("Eye Pattern", labelStyle);
+            GUILayout.BeginHorizontal(); 
+            advinpEyePatternText = GUILayout.TextField(advinpEyePatternText);
+            if (GUILayout.Button("+", GUILayout.Width(25)) && int.TryParse(advinpEyePatternText, out int eyePt1)) advinpEyePatternText = (eyePt1 + 1).ToString();
+            if (GUILayout.Button("-", GUILayout.Width(25)) && int.TryParse(advinpEyePatternText, out int eyePt2) && eyePt2 > 1) advinpEyePatternText = (eyePt2 - 1).ToString();
+            if (GUILayout.Button("?", GUILayout.Width(25))) advinpEyePatternText = (ChaControl.GetEyesPtn()+1).ToString();
+            GUILayout.EndHorizontal();
+            eval = int.TryParse(advinpEyePatternText, out p) && ChaControl.GetEyesPtn() == p - 1;
+            if (GUILayout.Button("Add Eye Pattern Input", eval ? buttonStyleGreen : buttonStyleRed) && int.TryParse(advinpEyePatternText, out int pt)) addAdvancedInputEyePattern(pt - 1, lfg.getSize() / 2);
+            #endregion
+
+            GUILayout.Space(15);
+
+            #region Eyebrow Pattern Input
+            GUILayout.Label("Eyebrow Pattern", labelStyle);
+            GUILayout.BeginHorizontal();
+            advinpEyebrowPatternText = GUILayout.TextField(advinpEyebrowPatternText);
+            if (GUILayout.Button("+", GUILayout.Width(25)) && int.TryParse(advinpEyebrowPatternText, out int eyebPt1)) advinpEyebrowPatternText = (eyebPt1 + 1).ToString();
+            if (GUILayout.Button("-", GUILayout.Width(25)) && int.TryParse(advinpEyebrowPatternText, out int eyebPt2) && eyebPt2 > 1) advinpEyebrowPatternText = (eyebPt2 - 1).ToString();
+            if (GUILayout.Button("?", GUILayout.Width(25))) advinpEyebrowPatternText = (ChaControl.GetEyebrowPtn() + 1).ToString();
+            GUILayout.EndHorizontal();
+            eval = int.TryParse(advinpEyebrowPatternText, out p) && ChaControl.GetEyebrowPtn() == p - 1;
+            if (GUILayout.Button("Add Eyebrow Pattern Input", eval ? buttonStyleGreen : buttonStyleRed) && int.TryParse(advinpEyebrowPatternText, out pt)) addAdvancedInputEyebrowPattern(pt - 1, lfg.getSize() / 2);
+            #endregion
+
+            GUILayout.Space(15);
+
+            #region Mouth Open Threshold
+            GUILayout.Label("Mouth Openess Threshold", labelStyle);
+            GUILayout.BeginHorizontal();
+            if (GUILayout.Button(advinpMouthOpenThresholdMore ? "◀ More Than ▶" : "◀ Less Than ▶")) { advinpMouthOpenThresholdMore = !advinpMouthOpenThresholdMore; }
+            if (GUILayout.Button("?", GUILayout.Width(25))) advinpMouthOpenThreshold = ChaControl.GetMouthOpenMax();
+            advinpMouthOpenThreshold = GUILayout.HorizontalSlider(advinpMouthOpenThreshold, 0, 1);
+            GUILayout.Label(advinpMouthOpenThreshold.ToString("0.00"), GUILayout.Width(30));
+            GUILayout.EndHorizontal();
+            eval = advinpMouthOpenThresholdMore ? ChaControl.GetMouthOpenMax() > advinpMouthOpenThreshold : ChaControl.GetMouthOpenMax() <= advinpMouthOpenThreshold;
+            if (GUILayout.Button("Add Mouth Threshold Input", eval ? buttonStyleGreen : buttonStyleRed))
+            {
+                addAdvancedInputMouthThreshold(advinpMouthOpenThresholdMore, advinpMouthOpenThreshold, lfg.getSize() / 2);
+            }
+            #endregion
+
+            GUILayout.Space(15);
+
+            #region Mouth Pattern Input
+            GUILayout.Label("Mouth Pattern", labelStyle);
+            GUILayout.BeginHorizontal(); 
+            advinpMouthPatternText = GUILayout.TextField(advinpMouthPatternText);
+            if (GUILayout.Button("+", GUILayout.Width(25)) && int.TryParse(advinpMouthPatternText, out int mouthPt1)) advinpMouthPatternText = (mouthPt1 + 1).ToString();
+            if (GUILayout.Button("-", GUILayout.Width(25)) && int.TryParse(advinpMouthPatternText, out int mouthPt2) && mouthPt2 > 1) advinpMouthPatternText = (mouthPt2 - 1).ToString();
+            if (GUILayout.Button("?", GUILayout.Width(25))) advinpMouthPatternText = (ChaControl.GetMouthPtn()+1).ToString();
+            GUILayout.EndHorizontal();
+            eval = int.TryParse(advinpMouthPatternText, out p) && ChaControl.GetMouthPtn() == p - 1;
+            if (GUILayout.Button("Add Mouth Pattern Input", eval ? buttonStyleGreen : buttonStyleRed) && int.TryParse(advinpMouthPatternText, out pt)) addAdvancedInputMouthPattern(pt - 1, lfg.getSize() / 2);
+            #endregion
+
+
+            GUILayout.EndVertical();
+            GUILayout.EndScrollView();
+            GUILayout.EndArea();
+
+            advancedInputWindowRect = KKAPI.Utilities.IMGUIUtils.DragResizeEatWindow(id, advancedInputWindowRect);
+
+        }
+        #endregion
+
         private Vector2 screenToGUI(Vector2 screenPos)
         {
             return new Vector2(screenPos.x, Screen.height - screenPos.y);
         }
-
+#if KKS
+        // KK -> KKS compatibility switcher
+        private int OutfitKK2KKS(int slot)
+        {
+            switch (slot)
+            {
+                case 0: return 4;
+                case 1: return 3;
+                case 2: return 5;
+                case 3: return 1;
+                case 4: return 6;
+                case 5: return 0;
+                case 6: return 2;
+                default: return slot;
+            }
+        }
+#endif
+        public static InputKey? GetInputKey(int clothingSlot, int clothingState)
+        {
+            switch (clothingSlot)
+            {
+                case 0:
+                    if (clothingState == 0) return InputKey.TopOn;
+                    if (clothingState == 1) return InputKey.TopShift;
+                    return null;
+                case 1:
+                    if (clothingState == 0) return InputKey.BottomOn;
+                    if (clothingState == 1) return InputKey.BottomShift;
+                    return null;
+                case 2:
+                    if (clothingState == 0) return InputKey.BraOn;
+                    if (clothingState == 1) return InputKey.BraShift;
+                    return null;
+                case 3:
+                    if (clothingState == 0) return InputKey.UnderwearOn;
+                    if (clothingState == 1) return InputKey.UnderwearShift;
+                    if (clothingState == 2) return InputKey.UnderwearHang;
+                    return null;
+                case 4:
+                    if (clothingState == 0) return InputKey.GlovesOn;
+                    if (clothingState == 1) return InputKey.GlovesShift;
+                    if (clothingState == 2) return InputKey.GlovesShift;
+                    return null;
+                case 5:
+                    if (clothingState == 0) return InputKey.PantyhoseOn;
+                    if (clothingState == 1) return InputKey.PantyhoseShift;
+                    if (clothingState == 2) return InputKey.PantyhoseHang;
+                    return null;
+                case 6:
+                    if (clothingState == 0) return InputKey.LegwearOn;
+                    return null;
+#if KK
+                case 7:
+                    if (clothingState == 0) return InputKey.ShoesIndoorOn;
+                    return null;
+                case 8:
+                    if (clothingState == 0) return InputKey.ShoesOutdoorOn;
+                    return null;
+#else
+                case 8:
+                    if (clothingState == 0) return InputKey.ShoesOn;
+                    return null;
+#endif
+                default:
+                    return null;
+            }
+        }
+        #endregion
+        #region ASS Data tranlation
         /// <summary>
         /// check is this trigger is valid (either existing state or off)
         /// </summary>
@@ -877,56 +1387,6 @@ namespace AmazingNewAccessoryLogic
             }
         }
 
-        private LogicFlowNode connectInputs(List<int> statesThatTurnTheOutputOn, int clothingSlot, int outfit, LogicFlowGraph graph)
-        {
-            switch (statesThatTurnTheOutputOn.Count)
-            {
-                case 0:
-                    return null;
-                case 1:
-                    LogicFlowNode input = getInput(clothingSlot, statesThatTurnTheOutputOn[0], outfit);
-                    return input;
-                case 2:
-                    LogicFlowNode input1 = getInput(clothingSlot, statesThatTurnTheOutputOn[0], outfit);
-                    LogicFlowNode input2 = getInput(clothingSlot, statesThatTurnTheOutputOn[1], outfit);
-                    LogicFlowNode_OR or0 = addOrGateForInputs(input1.index, input2.index, outfit);
-                    or0.setPosition(input1.getPosition() + new Vector2(75, 0));
-                    return or0;
-                case 3:
-                    LogicFlowNode input_1 = getInput(clothingSlot, statesThatTurnTheOutputOn[0], outfit);
-                    LogicFlowNode input_2 = getInput(clothingSlot, statesThatTurnTheOutputOn[1], outfit);
-                    LogicFlowNode input_3 = getInput(clothingSlot, statesThatTurnTheOutputOn[2], outfit);
-
-                    LogicFlowNode_OR or1 = addOrGateForInputs(input_1.index, input_2.index, outfit);
-                    LogicFlowNode_OR or2 = addOrGateForInputs(or1.index, input_3.index, outfit);
-
-                    or1.setPosition(input_1.getPosition() + new Vector2(75, 0));
-
-                    or2.setPosition(or1.getPosition() + new Vector2(75, 0));
-                    return or2;
-                case 4:
-                    return null;
-                default:
-                    return null;
-            }
-        }
-#if KKS
-        // KK -> KKS compatibility switcher
-        private int OutfitKK2KKS(int slot)
-        {
-            switch (slot)
-            {
-                case 0: return 4;
-                case 1: return 3;
-                case 2: return 5;
-                case 3: return 1;
-                case 4: return 6;
-                case 5: return 0;
-                case 6: return 2;
-                default: return slot;
-            }
-        }
-#endif
 
         public void TranslateFromAssForCharacter(int? OutfitSlot = null, ChaFile chaFile = null)
         {
@@ -1011,57 +1471,7 @@ namespace AmazingNewAccessoryLogic
 
             CreateNodesForAssData(triggersForSlot, ChaControl.fileStatus.coordinateType);
         }
-
-        public static InputKey? GetInputKey(int clothingSlot, int clothingState)
-        {
-            switch (clothingSlot)
-            {
-                case 0:
-                    if (clothingState == 0) return InputKey.TopOn;
-                    if (clothingState == 1) return InputKey.TopShift;
-                    return null;
-                case 1:
-                    if (clothingState == 0) return InputKey.BottomOn;
-                    if (clothingState == 1) return InputKey.BottomShift;
-                    return null;
-                case 2:
-                    if (clothingState == 0) return InputKey.BraOn;
-                    if (clothingState == 1) return InputKey.BraShift;
-                    return null;
-                case 3:
-                    if (clothingState == 0) return InputKey.UnderwearOn;
-                    if (clothingState == 1) return InputKey.UnderwearShift;
-                    if (clothingState == 2) return InputKey.UnderwearHang;
-                    return null;
-                case 4:
-                    if (clothingState == 0) return InputKey.GlovesOn;
-                    if (clothingState == 1) return InputKey.GlovesShift;
-                    if (clothingState == 2) return InputKey.GlovesShift;
-                    return null;
-                case 5:
-                    if (clothingState == 0) return InputKey.PantyhoseOn;
-                    if (clothingState == 1) return InputKey.PantyhoseShift;
-                    if (clothingState == 2) return InputKey.PantyhoseHang;
-                    return null;
-                case 6:
-                    if (clothingState == 0) return InputKey.LegwearOn;
-                    return null;
-#if KK
-                case 7:
-                    if (clothingState == 0) return InputKey.ShoesIndoorOn;
-                    return null;
-                case 8:
-                    if (clothingState == 0) return InputKey.ShoesOutdoorOn;
-                    return null;
-#else
-                case 8:
-                    if (clothingState == 0) return InputKey.ShoesOn;
-                    return null;
-#endif
-                default:
-                    return null;
-            }
-        }
+        #endregion
     }
 
     public enum InputKey
@@ -1088,5 +1498,17 @@ namespace AmazingNewAccessoryLogic
         ShoesIndoorOn = 1017,
         ShoesOutdoorOn = 1018
 #endif
+    }
+
+    public enum AdvancedInputType
+    {
+        Trigger, // not implemented (yet)
+        Accessory,
+        HandPtn,
+        EyesPtn,
+        EyesOpn,
+        MouthPtn,
+        MouthOpn,
+        EyebrowPtn
     }
 }

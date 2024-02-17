@@ -65,6 +65,10 @@
     <Reference Include="New.UnityLogicFlows">
       <HintPath>..\..\..\..\_Libs_KKS\New.UnityLogicFlows.dll</HintPath>
     </Reference>
+    <Reference Include="RuntimeUnityEditor.Core, Version=5.2.1.0, Culture=neutral, processorArchitecture=MSIL">
+      <HintPath>..\packages\RuntimeUnityEditor.Core.5.2.1\lib\net35\RuntimeUnityEditor.Core.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
     <Reference Include="Sirenix.Serialization, Version=2.1.13.0, Culture=neutral, processorArchitecture=MSIL">
       <HintPath>..\packages\IllusionLibs.KoikatsuSunshine.UnityEngine.CoreModule.2019.4.9\lib\net46\Sirenix.Serialization.dll</HintPath>
       <Private>False</Private>

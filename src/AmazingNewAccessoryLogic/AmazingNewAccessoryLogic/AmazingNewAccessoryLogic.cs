@@ -12,6 +12,7 @@ using UniRx;
 using KKAPI.Chara;
 using IllusionFixes;
 using BepInEx.Configuration;
+using KKAPI.Maker.UI;
 
 namespace AmazingNewAccessoryLogic
 {
@@ -22,11 +23,13 @@ namespace AmazingNewAccessoryLogic
     {
         public const string PluginName = "AmazingNewAccessoryLogic";
         public const string GUID = "org.njaecha.plugins.anal";
-        public const string Version = "0.0.5";
+        public const string Version = "0.0.6";
 
         internal new static ManualLogSource Logger;
 
-        internal SidebarToggle toggle;
+        public static SidebarToggle SidebarToggle;
+        public static MakerButton AccessoryButton;
+        public static MakerButton AccessoryButton2;
 
         public static AmazingNewAccessoryLogic Instance;
 
@@ -34,7 +37,7 @@ namespace AmazingNewAccessoryLogic
 
         void Awake()
         {
-            MakerAPI.MakerBaseLoaded += createSideBarToggle;
+            MakerAPI.MakerBaseLoaded += createMakerInteractables;
             Logger = base.Logger;
 
 
@@ -68,16 +71,33 @@ namespace AmazingNewAccessoryLogic
         {
             if (b)
             {
-                MakerAPI.GetCharacterControl()?.GetComponent<AnalCharaController>()?.show(Input.GetKey(KeyCode.LeftShift));
+                MakerAPI.GetCharacterControl()?.GetComponent<AnalCharaController>()?.Show(Input.GetKey(KeyCode.LeftShift));
             }
-            else MakerAPI.GetCharacterControl()?.GetComponent<AnalCharaController>()?.hide();
+            else MakerAPI.GetCharacterControl()?.GetComponent<AnalCharaController>()?.Hide();
         }
 
-        private void createSideBarToggle(object sender, RegisterCustomControlsEvent e)
+        private void createMakerInteractables(object sender, RegisterCustomControlsEvent e)
         {
-            toggle = e.AddSidebarControl(new SidebarToggle("Show ANAL", false, this));
-            toggle.ValueChanged.Subscribe(delegate (bool b) {
+            SidebarToggle = e.AddSidebarControl(new SidebarToggle("Show ANAL", false, this));
+            SidebarToggle.ValueChanged.Subscribe(delegate (bool b) {
                 showGraphInMaker(b);
+            });
+
+            AccessoryButton = MakerAPI.AddAccessoryWindowControl(new MakerButton("Create ANAL Output", null, this));
+            AccessoryButton.GroupingID = "Buttons";
+            AccessoryButton.OnClick.AddListener(() =>
+            {
+                showGraphInMaker(true);
+                MakerAPI.GetCharacterControl()?.GetComponent<AnalCharaController>()?.addOutput(AccessoriesApi.SelectedMakerAccSlot);
+            });
+
+            AccessoryButton2 = MakerAPI.AddAccessoryWindowControl(new MakerButton("Create ANAL Input", null, this));
+            AccessoryButton2.GroupingID = "Buttons";
+            AccessoryButton2.OnClick.AddListener(() =>
+            {
+                showGraphInMaker(true);
+                AnalCharaController analCharaController = MakerAPI.GetCharacterControl()?.GetComponent<AnalCharaController>();
+                analCharaController?.addAdvanedInputAccessory(AccessoriesApi.SelectedMakerAccSlot, analCharaController.lfg.getSize()/2);
             });
         }
 

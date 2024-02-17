@@ -22,7 +22,7 @@ namespace AmazingNewAccessoryLogic
             List<SerialisedNode> nodeList = new List<SerialisedNode>();
             foreach (LogicFlowNode n in graph.getAllNodes())
             {
-                SerialisedNode sNode = SerialisedNode.Serialise(n);
+                SerialisedNode sNode = SerialisedNode.Serialise(n, graph);
                 if (sNode != null)
                 {
                     nodeList.Add(sNode);
