@@ -26,7 +26,7 @@ namespace AmazingNewAccessoryLogic
         private Dictionary<int, LogicFlowGraph> graphs = new Dictionary<int, LogicFlowGraph>();
         private Dictionary<int, List<int>> activeSlots = new Dictionary<int, List<int>>();
 
-        private bool displayGraph = false;
+        internal bool displayGraph = false;
         private static Material mat = new Material(Shader.Find("Hidden/Internal-Colored"));
 
         //render bodge 
@@ -34,8 +34,6 @@ namespace AmazingNewAccessoryLogic
         private Camera rCam;
 
         private byte[] oldClothStates;
-
-        
 
         #region GameEvetns
         protected override void OnCardBeingSaved(GameMode currentGameMode)
@@ -943,6 +941,55 @@ namespace AmazingNewAccessoryLogic
         private bool kkcompatibility = false;
 #endif
         private bool fullCharacter = false;
+
+        private bool showHelp = false;
+        private Vector2 showHelpScroll = new Vector2();
+
+        private List<string> helpText = new List<string>()
+        {
+            "Basics:",
+            "Connect nodes by dragging from the right triangle (output) to left triangle (input) of another\n"+
+            "Disconnect nodes dragging the connection away from the input or by RIGHT CLICKING the input\n"+
+            "RED nodes/Connections means its currently OFF\n"+
+            "GREEN nodes/Connections means its currenlty ON\n"+
+            "Nodes with RED BORDER have missing inputs\n"+
+            "Nodes with a YELLOW body are currently selected",
+            "Controls:",
+            "Move Nodes by CLICKING and DRAGGING them\n"+
+            "Resize the window on its BOTTOM RIGHT corner\n"+
+            "Select MULTIPLE nodes by holding SHIFT\n"+
+            "Select a group of nodes with a box (left drag on empty space)\n"+
+            "Unselect all nodes by left clicking empty space\n"+
+            "Delete selected nodes by pressing DEL\n"+
+            "Disable selected nodes by pressing ALT+D\n"+
+            "Disabled nodes will output FALSE, no matter the input\n"+
+            "Select all downstream nodes of the selected nodes by pressing T (Tree)\n"+
+            "Select all influenced nodes of the selected nodes by pressing N (Network)",
+            "Basic Nodes:",
+            "INPUTS turn on/off according to the clothing state they represent\n"+
+            "ACCESSORY INPUTS turn on/off according to the accessory slot they represent\n"+
+            "Add ACCESSORY INPUTS by clicking the button in the accessory UI\n"+
+            "OUTPUTS control the according accessory slot\n"+
+            "Add OUTPUTs by clicking the button in the accessory UI\n"+
+            "NOT-GATES output the opposite of their input\n"+
+            "AND-GATES turn on if BOTH inputs are on\n"+
+            "OR-GATES turn on if ONE OR BOTH inputs are on\n"+
+            "XOR-GATES turn on if EXACTLY ONE input is on",
+            "Advanced Input Nodes:",
+            "HAND PATTERN is on if the specified hand is set to the specified pattern\n"+
+            "EYE PATTERN is on if the eyes are set to the specified pattern\n"+
+            "EYE THRESHOLD is on if the eye are MORE or LESS OR EQUALLY open compared to the specified threshold\n"+
+            "MOUTH PATTERN is on if the moth is set to the specified pattern\n"+
+            "MOUTH THRESHOLD is on if the mouth is MORE or LESS OR EQUALLY open compared to the specified theshold\n"+
+            "EYEBROW PATTERN is on if the eyesbrows are set to the specified pattern",
+            "ASS Data Conversion",
+            "Feature is experimental, no guarantees!!\n"+
+            "Tries to convert Accessory State Sync data saved in the card to a ANAL graph\n"+
+            "Only Accessories with ONE or TWO connected clothing slots are supported\n"+
+            "The generated nodes will not be sorted properly and overlap\n"+
+            "The generated graph can often be simplified a lot"
+        };
+
         void OnGUI()
         {
             
@@ -1017,6 +1064,35 @@ namespace AmazingNewAccessoryLogic
                     else if (ExtendedSave.GetExtendedDataById(ChaControl.nowCoordinate, "madevil.kk.ass") == null) TranslateFromAssForCharacter(ChaControl.fileStatus.coordinateType);
                     else TranslateFromAssForCoordinate();
                 }
+
+                if (GUI.Button(new Rect(screenToGUI(lfg.positionUI + lfg.sizeUI + new Vector2(10, i -= 30)), new Vector2(120, 30)), "Show Help"))
+                {
+                    showHelp = !showHelp;
+                }
+
+                #region HELP
+                if (showHelp)
+                {
+                    GUI.Box(new Rect(screenToGUI(lfg.positionUI + new Vector2(-255, lfg.sizeUI.y)), new Vector2(250, 350)), "HELP TEXT", KKAPI.Utilities.IMGUIUtils.SolidBackgroundGuiSkin.window);
+                    GUILayout.BeginArea(new Rect(screenToGUI(lfg.positionUI + new Vector2(-255, lfg.sizeUI.y-20)), new Vector2(250, 330)));
+                    showHelpScroll = GUILayout.BeginScrollView(showHelpScroll);
+                    GUILayout.BeginVertical();
+
+                    GUIStyle helpLableStyle = new GUIStyle(GUI.skin.label);
+                    helpLableStyle.alignment = TextAnchor.MiddleCenter;
+
+                    foreach (string line in helpText)
+                    {
+                        GUILayout.Label(line, helpLableStyle);
+                    }
+
+                    GUILayout.EndVertical();
+                    GUILayout.EndScrollView();
+                    GUILayout.EndArea();
+                }
+                #endregion
+
+
                 lfg.ongui();
             }
         }

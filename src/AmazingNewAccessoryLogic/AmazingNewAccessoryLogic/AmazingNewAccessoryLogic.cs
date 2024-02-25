@@ -13,6 +13,9 @@ using KKAPI.Chara;
 using IllusionFixes;
 using BepInEx.Configuration;
 using KKAPI.Maker.UI;
+using KKAPI.Studio.UI;
+using KKAPI.Studio;
+using HarmonyLib;
 
 namespace AmazingNewAccessoryLogic
 {
@@ -48,6 +51,27 @@ namespace AmazingNewAccessoryLogic
             AccessoriesApi.AccessoriesCopied += AccessoriesCopied;
 
             UIScaleModifier = Config.Bind("UI", "UI Scale Factor", Screen.height <= 1080 ? 1.3f : 1f, new ConfigDescription("Additional Scale to apply to the UI", new AcceptableValueRange<float>(0.5f, 2f)));
+        }
+
+        void Start()
+        {
+            if ( StudioAPI.InsideStudio)
+            {
+                StudioLoaded();
+            }
+        }
+
+        private void StudioLoaded()
+        {
+            CurrentStateCategory currentStateCategory = StudioAPI.GetOrCreateCurrentStateCategory(null);
+            currentStateCategory.AddControl(
+                new CurrentStateCategorySwitch("Show ANAL", 
+                c => c.GetChaControl().GetComponent<AnalCharaController>().displayGraph)).Value.Subscribe(
+                display =>
+                {
+                    if (!display) StudioAPI.GetSelectedControllers<AnalCharaController>().Do(controller => controller.Hide());
+                    else StudioAPI.GetSelectedControllers<AnalCharaController>().Do(controller => controller.Show(Input.GetKey(KeyCode.LeftShift)));
+                });
         }
 
         private void AccessoriesCopied(object sender, AccessoryCopyEventArgs e)
