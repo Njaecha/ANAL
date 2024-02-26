@@ -941,7 +941,7 @@ namespace AmazingNewAccessoryLogic
         private bool kkcompatibility = false;
 #endif
         private bool fullCharacter = false;
-
+        private string studioAddOutputTextInput = "1";
         private bool showHelp = false;
         private Vector2 showHelpScroll = new Vector2();
 
@@ -1018,6 +1018,8 @@ namespace AmazingNewAccessoryLogic
 #if KKS
                 boxSize += 30;
 #endif
+                if (KKAPI.Studio.StudioAPI.InsideStudio) boxSize += 60;
+
 
                 GUI.Label(new Rect(screenToGUI(lfg.positionUI + new Vector2(10, lfg.sizeUI.y + (lfg.getUIScale() * 20) + 15)), new Vector2(250, 25)), $"AmazingNewAccessoryLogic v{AmazingNewAccessoryLogic.Version}", headerTextStyle);
                 if (GUI.Button(new Rect(screenToGUI(lfg.positionUI + lfg.sizeUI + new Vector2(-65, (lfg.getUIScale() * 28) + 4)), new Vector2(60, (lfg.getUIScale() * 10) +10)), "Close"))
@@ -1027,54 +1029,54 @@ namespace AmazingNewAccessoryLogic
 
                 GUI.Box(new Rect(screenToGUI(lfg.positionUI + lfg.sizeUI + new Vector2(5, 0)), new Vector2(130, boxSize)), "");
 
-                int i = 0;
+                GUILayout.BeginArea(new Rect(screenToGUI(lfg.positionUI + lfg.sizeUI + new Vector2(5, 0)), new Vector2(130, boxSize)));
+                GUILayout.BeginVertical();
 
                 // add nodes buttons
-                if (GUI.Button(new Rect(screenToGUI(lfg.positionUI + lfg.sizeUI + new Vector2(10, i-=5)), new Vector2(120, 30)), "Add NOT Gate"))
-                {
-                    addGate(0);
-                }
-                if (GUI.Button(new Rect(screenToGUI(lfg.positionUI + lfg.sizeUI + new Vector2(10, i-=35)), new Vector2(120, 30)), "Add AND Gate"))
-                {
-                    addGate(1);
-                }
-                if (GUI.Button(new Rect(screenToGUI(lfg.positionUI + lfg.sizeUI + new Vector2(10, i-=35)), new Vector2(120, 30)), "Add OR Gate"))
-                {
-                    addGate(2);
-                }
-                if (GUI.Button(new Rect(screenToGUI(lfg.positionUI + lfg.sizeUI + new Vector2(10, i-=35)), new Vector2(120, 30)), "Add XOR Gate"))
-                {
-                    addGate(3);
-                }
-                if (GUI.Button(new Rect(screenToGUI(lfg.positionUI + lfg.sizeUI + new Vector2(10, i-=35)), new Vector2(120, 30)), "Advanced Inputs"))
-                {
-                    showAdvancedInputWindow = !showAdvancedInputWindow;
-                }
+                if (GUILayout.Button("Add NOT Gate")) addGate(0);
+                if (GUILayout.Button("Add AND Gate")) addGate(1);
+                if (GUILayout.Button("Add OR Gate")) addGate(2);
+                if (GUILayout.Button("Add XOR Gate")) addGate(3);
+                if (GUILayout.Button("Advanced Inputs")) showAdvancedInputWindow = !showAdvancedInputWindow;
 #if KKS
-
-                kkcompatibility = GUI.Toggle(new Rect(screenToGUI(lfg.positionUI + lfg.sizeUI + new Vector2(10, i-=30)), new Vector2(120, 25)), kkcompatibility, "KK Compatiblity");
+                kkcompatibility = GUILayout.Toggle(kkcompatibility, "KK Compatiblity");
 #endif
-                if (GUI.Button(new Rect(screenToGUI(lfg.positionUI + lfg.sizeUI + new Vector2(10, i -= 25)), new Vector2(120, 25)), fullCharacter ? "◀ All Outfits ▶" : "◀ Current Outfit ▶"))
-                {
-                    fullCharacter = !fullCharacter;
-                }
-                if (GUI.Button(new Rect(screenToGUI(lfg.positionUI + lfg.sizeUI + new Vector2(10, i -= 30)), new Vector2(120, 30)), "Load from ASS"))
+                if (GUILayout.Button(fullCharacter ? "◀ All Outfits ▶" : "◀ Current Outfit ▶")) fullCharacter = !fullCharacter;
+                if (GUILayout.Button("Load from ASS"))
                 {
                     if (fullCharacter) TranslateFromAssForCharacter();
                     else if (ExtendedSave.GetExtendedDataById(ChaControl.nowCoordinate, "madevil.kk.ass") == null) TranslateFromAssForCharacter(ChaControl.fileStatus.coordinateType);
                     else TranslateFromAssForCoordinate();
                 }
 
-                if (GUI.Button(new Rect(screenToGUI(lfg.positionUI + lfg.sizeUI + new Vector2(10, i -= 30)), new Vector2(120, 30)), "Show Help"))
+                if (GUILayout.Button("Show Help")) showHelp = !showHelp;
+
+                
+                #region Studio Output Widget
+                if (KKAPI.Studio.StudioAPI.InsideStudio)
                 {
-                    showHelp = !showHelp;
+                    GUILayout.BeginHorizontal();
+                    studioAddOutputTextInput = GUILayout.TextField(studioAddOutputTextInput);
+                    if (GUILayout.Button("+", GUILayout.Width(25)) && int.TryParse(studioAddOutputTextInput, out int a)) studioAddOutputTextInput = (a + 1).ToString();
+                    if (GUILayout.Button("-", GUILayout.Width(25)) && int.TryParse(advinpEyePatternText, out int b) && b > 1) studioAddOutputTextInput = (b - 1).ToString();
+                    GUILayout.EndHorizontal();
+                    if (GUILayout.Button("Add Output"))
+                    {
+                        if (int.TryParse(studioAddOutputTextInput, out int slot) && slot > 1)
+                        {
+                            addOutput(slot - 1);
+                        }
+                    }
                 }
+                #endregion
+                GUILayout.EndVertical();
+                GUILayout.EndArea();
 
                 #region HELP
                 if (showHelp)
                 {
                     GUI.Box(new Rect(screenToGUI(lfg.positionUI + new Vector2(-255, lfg.sizeUI.y)), new Vector2(250, 350)), "HELP TEXT", KKAPI.Utilities.IMGUIUtils.SolidBackgroundGuiSkin.window);
-                    GUILayout.BeginArea(new Rect(screenToGUI(lfg.positionUI + new Vector2(-255, lfg.sizeUI.y-20)), new Vector2(250, 330)));
+                    GUILayout.BeginArea(new Rect(screenToGUI(lfg.positionUI + new Vector2(-255, lfg.sizeUI.y - 20)), new Vector2(250, 330)));
                     showHelpScroll = GUILayout.BeginScrollView(showHelpScroll);
                     GUILayout.BeginVertical();
 
@@ -1091,7 +1093,6 @@ namespace AmazingNewAccessoryLogic
                     GUILayout.EndArea();
                 }
                 #endregion
-
 
                 lfg.ongui();
             }

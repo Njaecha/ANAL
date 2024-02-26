@@ -1,5 +1,5 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
-<Project ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+<Project DefaultTargets="Build" ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
   <PropertyGroup>
     <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
@@ -47,27 +47,11 @@
       <HintPath>..\packages\IllusionLibs.KoikatsuSunshine.Assembly-CSharp-firstpass.2021.9.17\lib\net46\Assembly-CSharp-firstpass.dll</HintPath>
       <Private>False</Private>
     </Reference>
-    <Reference Include="BepInEx, Version=5.4.20.0, Culture=neutral, processorArchitecture=MSIL">
-      <HintPath>..\packages\IllusionLibs.BepInEx.5.4.20\lib\net35\BepInEx.dll</HintPath>
-      <Private>False</Private>
-    </Reference>
-    <Reference Include="KKSAPI, Version=1.36.0.0, Culture=neutral, processorArchitecture=MSIL">
-      <HintPath>..\packages\IllusionModdingAPI.KKSAPI.1.36.0\lib\net46\KKSAPI.dll</HintPath>
-      <Private>False</Private>
-    </Reference>
-    <Reference Include="KKS_ExtensibleSaveFormat, Version=1.0.0.0, Culture=neutral, processorArchitecture=MSIL">
-      <HintPath>..\packages\ExtensibleSaveFormat.KoikatsuSunshine.16.8.1\lib\net46\KKS_ExtensibleSaveFormat.dll</HintPath>
-      <Private>False</Private>
-    </Reference>
     <Reference Include="KKS_Fix_MakerOptimizations">
       <HintPath>..\..\..\..\_Libs_KKS\KKS_Fix_MakerOptimizations.dll</HintPath>
     </Reference>
     <Reference Include="New.UnityLogicFlows">
       <HintPath>..\..\..\..\_Libs_KKS\New.UnityLogicFlows.dll</HintPath>
-    </Reference>
-    <Reference Include="RuntimeUnityEditor.Core, Version=5.2.1.0, Culture=neutral, processorArchitecture=MSIL">
-      <HintPath>..\packages\RuntimeUnityEditor.Core.5.2.1\lib\net35\RuntimeUnityEditor.Core.dll</HintPath>
-      <Private>False</Private>
     </Reference>
     <Reference Include="Sirenix.Serialization, Version=2.1.13.0, Culture=neutral, processorArchitecture=MSIL">
       <HintPath>..\packages\IllusionLibs.KoikatsuSunshine.UnityEngine.CoreModule.2019.4.9\lib\net46\Sirenix.Serialization.dll</HintPath>
@@ -132,6 +116,21 @@
     <Reference Include="UnityEngine.UIModule, Version=0.0.0.0, Culture=neutral, processorArchitecture=MSIL">
       <HintPath>..\packages\IllusionLibs.KoikatsuSunshine.UnityEngine.UIModule.2019.4.9\lib\net46\UnityEngine.UIModule.dll</HintPath>
       <Private>False</Private>
+    </Reference>
+    <Reference Include="New.UnityLogicFlows">
+      <HintPath>..\packages\New.UnityLogicFlows.dll</HintPath>
+    </Reference>
+    <Reference Include="KKS_ExtensibleSaveFormat">
+      <HintPath>..\packages\ExtensibleSaveFormat.KoikatsuSunshine.19.5.0\lib\net46\KKS_ExtensibleSaveFormat.dll</HintPath>
+    </Reference>
+    <Reference Include="BepInEx">
+      <HintPath>..\packages\IllusionLibs.BepInEx.5.4.22\lib\net35\BepInEx.dll</HintPath>
+    </Reference>
+    <Reference Include="KKSAPI">
+      <HintPath>..\packages\IllusionModdingAPI.KKSAPI.1.38.0\lib\net46\KKSAPI.dll</HintPath>
+    </Reference>
+    <Reference Include="RuntimeUnityEditor.Core">
+      <HintPath>..\packages\RuntimeUnityEditor.Core.5.3.0\lib\net35\RuntimeUnityEditor.Core.dll</HintPath>
     </Reference>
   </ItemGroup>
   <ItemGroup>
