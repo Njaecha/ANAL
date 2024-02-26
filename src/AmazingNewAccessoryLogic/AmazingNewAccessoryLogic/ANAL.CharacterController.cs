@@ -1017,7 +1017,7 @@ namespace AmazingNewAccessoryLogic
 
                 GUI.DrawTexture(new Rect(0, 0, Screen.width, Screen.height), rTex);
 
-                int boxSize = 265;
+                int boxSize = 270;
 #if KKS
                 boxSize += 30;
 #endif
@@ -1032,15 +1032,17 @@ namespace AmazingNewAccessoryLogic
 
                 GUI.Box(new Rect(screenToGUI(lfg.positionUI + lfg.sizeUI + new Vector2(5, 0)), new Vector2(130, boxSize)), "");
 
-                GUILayout.BeginArea(new Rect(screenToGUI(lfg.positionUI + lfg.sizeUI + new Vector2(5, 0)), new Vector2(130, boxSize)));
+                GUILayout.BeginArea(new Rect(screenToGUI(lfg.positionUI + lfg.sizeUI + new Vector2(10, -5)), new Vector2(120, boxSize-10)));
                 GUILayout.BeginVertical();
 
                 // add nodes buttons
-                if (GUILayout.Button("Add NOT Gate")) addGate(0);
-                if (GUILayout.Button("Add AND Gate")) addGate(1);
-                if (GUILayout.Button("Add OR Gate")) addGate(2);
-                if (GUILayout.Button("Add XOR Gate")) addGate(3);
-                if (GUILayout.Button("Advanced Inputs")) showAdvancedInputWindow = !showAdvancedInputWindow;
+                if (GUILayout.Button("Add NOT Gate", GUILayout.Height(30))) addGate(0);
+                if (GUILayout.Button("Add AND Gate", GUILayout.Height(30))) addGate(1);
+                if (GUILayout.Button("Add OR Gate", GUILayout.Height(30))) addGate(2);
+                if (GUILayout.Button("Add XOR Gate", GUILayout.Height(30))) addGate(3);
+                GUILayout.Space(8);
+                if (GUILayout.Button("Advanced Inputs", GUILayout.Height(30))) showAdvancedInputWindow = !showAdvancedInputWindow;
+                GUILayout.Space(8);
 #if KKS
                 kkcompatibility = GUILayout.Toggle(kkcompatibility, "KK Compatiblity");
 #endif
@@ -1051,9 +1053,9 @@ namespace AmazingNewAccessoryLogic
                     else if (ExtendedSave.GetExtendedDataById(ChaControl.nowCoordinate, "madevil.kk.ass") == null) TranslateFromAssForCharacter(ChaControl.fileStatus.coordinateType);
                     else TranslateFromAssForCoordinate();
                 }
-
+                GUILayout.Space(8);
                 if (GUILayout.Button("Show Help")) showHelp = !showHelp;
-
+                GUILayout.Space(8);
                 
                 #region Studio Output Widget
                 if (KKAPI.Studio.StudioAPI.InsideStudio)
@@ -1061,11 +1063,11 @@ namespace AmazingNewAccessoryLogic
                     GUILayout.BeginHorizontal();
                     studioAddOutputTextInput = GUILayout.TextField(studioAddOutputTextInput);
                     if (GUILayout.Button("+", GUILayout.Width(25)) && int.TryParse(studioAddOutputTextInput, out int a)) studioAddOutputTextInput = (a + 1).ToString();
-                    if (GUILayout.Button("-", GUILayout.Width(25)) && int.TryParse(advinpEyePatternText, out int b) && b > 1) studioAddOutputTextInput = (b - 1).ToString();
+                    if (GUILayout.Button("-", GUILayout.Width(25)) && int.TryParse(studioAddOutputTextInput, out int b) && b > 1) studioAddOutputTextInput = (b - 1).ToString();
                     GUILayout.EndHorizontal();
                     if (GUILayout.Button("Add Output"))
                     {
-                        if (int.TryParse(studioAddOutputTextInput, out int slot) && slot > 1)
+                        if (int.TryParse(studioAddOutputTextInput, out int slot) && slot >= 1)
                         {
                             addOutput(slot - 1);
                         }
@@ -1083,8 +1085,9 @@ namespace AmazingNewAccessoryLogic
                     showHelpScroll = GUILayout.BeginScrollView(showHelpScroll);
                     GUILayout.BeginVertical();
 
-                    GUIStyle helpLableStyle = new GUIStyle(GUI.skin.label);
+                    GUIStyle helpLableStyle = new GUIStyle(GUI.skin.box);
                     helpLableStyle.alignment = TextAnchor.MiddleCenter;
+                    helpLableStyle.wordWrap = true;
 
                     foreach (string line in helpText)
                     {
