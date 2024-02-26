@@ -1469,6 +1469,10 @@ namespace AmazingNewAccessoryLogic
                     }
                 }
 
+                if (slotData.Keys.Count > 2)
+                {
+                    AmazingNewAccessoryLogic.Logger.LogWarning($"Found {slotData.Keys.Count} clothing slots ({slotData.Keys.ToList()}) connected to slot {slot}. Due to the complexity of the translation a max or 2 clothing slots is supported.");
+                }
 
                 doneSlots.Add(slot);
             }
@@ -1509,6 +1513,11 @@ namespace AmazingNewAccessoryLogic
             Dictionary<int, Dictionary<int, Dictionary<int, TriggerProperty[]>>> triggersForSlotForOutfit = new Dictionary<int, Dictionary<int, Dictionary<int, TriggerProperty[]>>>();
             foreach (TriggerProperty tp in _triggers)
             {
+                if (tp.ClothingSlot >= 9) // There is only clothing slots 0-8, so >=9 indicates a custom group
+                {
+                    AmazingNewAccessoryLogic.Logger.LogInfo($"Coustom group trigger property found for Accessory {tp.Slot}, ClothingSlot {tp.ClothingSlot}; This is not supported (yet)!");
+                    continue;
+                }
                 if (!triggersForSlotForOutfit.ContainsKey(tp.Coordinate)) triggersForSlotForOutfit.Add(tp.Coordinate, new Dictionary<int, Dictionary<int, TriggerProperty[]>>());
                 if (!triggersForSlotForOutfit[tp.Coordinate].ContainsKey(tp.Slot)) triggersForSlotForOutfit[tp.Coordinate].Add(tp.Slot, new Dictionary<int, TriggerProperty[]>());
                 if (!triggersForSlotForOutfit[tp.Coordinate][tp.Slot].ContainsKey(tp.ClothingSlot)) triggersForSlotForOutfit[tp.Coordinate][tp.Slot].Add(tp.ClothingSlot, new TriggerProperty[4]);
@@ -1551,6 +1560,11 @@ namespace AmazingNewAccessoryLogic
             Dictionary<int, Dictionary<int, TriggerProperty[]>> triggersForSlot = new Dictionary<int, Dictionary<int, TriggerProperty[]>>();
             foreach(TriggerProperty tp in _triggers)
             {
+                if (tp.ClothingSlot >= 9) // There is only clothing slots 0-8, so >=9 indicates a custom group
+                {
+                    AmazingNewAccessoryLogic.Logger.LogInfo($"Coustom group trigger property found for Accessory {tp.Slot}, ClothingSlot {tp.ClothingSlot}; This is not supported (yet)!");
+                    continue;
+                }
                 if (!triggersForSlot.ContainsKey(tp.Slot)) triggersForSlot.Add(tp.Slot, new Dictionary<int, TriggerProperty[]>());
                 if (!triggersForSlot[tp.Slot].ContainsKey(tp.ClothingSlot)) triggersForSlot[tp.Slot].Add(tp.ClothingSlot, new TriggerProperty[4]);
                 triggersForSlot[tp.Slot][tp.ClothingSlot][tp.ClothingState] = tp;
