@@ -561,7 +561,9 @@ namespace AmazingNewAccessoryLogic
             else g = graphs[outfit.Value];
             if (g == null) return null;
 
-            LogicFlowInput_Func node = new LogicFlowInput_Func(() => ChaControl.fileStatus.showAccessory[slot], g, index) { label = $"Slot {slot+1}" };
+            LogicFlowInput_Func node = new LogicFlowInput_Func(() => {
+                return ChaControl.fileStatus.showAccessory.Length > slot ? ChaControl.fileStatus.showAccessory[slot] : false; 
+            }, g, index) { label = $"Slot {slot+1}" };
 
             if (node != null)
             {
@@ -836,6 +838,7 @@ namespace AmazingNewAccessoryLogic
 
         public void setAccessoryState(int accessorySlot, bool stateValue)
         {
+            if (accessorySlot > ChaControl.fileStatus.showAccessory.Length) return;
             ChaControl.fileStatus.showAccessory[accessorySlot] = stateValue;
         }
 
@@ -1341,7 +1344,10 @@ namespace AmazingNewAccessoryLogic
             // Translation
             foreach (int slot in data.Keys)
             {
+                // clothing slot -> trigger property
                 Dictionary<int, TriggerProperty[]> slotData = data[slot];
+
+                AmazingNewAccessoryLogic.Logger.LogDebug($"Converting TriggerProperties for accessory slot {slot}");
 
                 LogicFlowNode output = getOutput(slot, outfit);
                 if (output == null)
@@ -1359,6 +1365,7 @@ namespace AmazingNewAccessoryLogic
                     {
                         if (trig.Visible && validTrigger(trig)) statesThatTurnTheOutputOn.Add(trig.ClothingState);
                     }
+                    AmazingNewAccessoryLogic.Logger.LogDebug($"Found 1 clothing slot [{clothingSlot}] for acc {slot}: States that turn the ouput on: {statesThatTurnTheOutputOn}");
                     switch (statesThatTurnTheOutputOn.Count)
                     {
                         case 0:
@@ -1381,11 +1388,11 @@ namespace AmazingNewAccessoryLogic
                         triggerProperties.Add(slotData[key]);
                         outfitSlots.Add(key);
                     }
-
+                    AmazingNewAccessoryLogic.Logger.LogDebug($"Found 2 clothing slots {outfitSlots} for acc {slot}:");
                     for (int i = 0; i < 4; i++) // for each state in outfitSlot1
                     {
                         TriggerProperty A = triggerProperties[0][i];
-                        if (!validTrigger(A)) continue;
+                        if (!validTrigger(A)) continue; // if A is a trigger that can never be true
                         TriggerProperty[] outfitSlot2 = triggerProperties[1];
 
                         List<int> statesThatTurnTheOutputOn = new List<int>();
@@ -1400,10 +1407,11 @@ namespace AmazingNewAccessoryLogic
                                 if (validTrigger(B)) statesThatTurnTheOutputOn.Add(B.ClothingState);
                             }
                         }
-
+                        AmazingNewAccessoryLogic.Logger.LogDebug($"-> ClothingSlot A ({outfitSlots[0]}) State {i} claims visible={A.Visible} and priority={A.Priority}; B ({outfitSlots[1]}) claims visible={outfitSlot2.Select(trig => trig.Visible)} and priority={outfitSlot2.Select(trig => trig.Priority)}, therefor sates that turn the output on {statesThatTurnTheOutputOn} ");
                         switch (statesThatTurnTheOutputOn.Count)
                         {
                             case 0:
+                                AmazingNewAccessoryLogic.Logger.LogDebug($"--> ClothingSlot A has full priority, and visible is {A.Visible}");
                                 if (i == 3 && output is LogicFlowNode_OR)
                                 {
                                     graph.getAllNodes().ForEach(node =>
@@ -1423,6 +1431,7 @@ namespace AmazingNewAccessoryLogic
                             case 1:
                             case 2:
                             case 3:
+                                AmazingNewAccessoryLogic.Logger.LogDebug($"--> ClothingSlot B has priority on states {statesThatTurnTheOutputOn}");
                                 LogicFlowNode connectedInputs = connectInputs(statesThatTurnTheOutputOn, outfitSlots[1], outfit, graph);
                                 LogicFlowNode_AND and = addAndGateForInputs(connectedInputs.index, getInput(A.ClothingSlot, A.ClothingState, outfit).index, outfit);
                                 and.setPosition(connectedInputs.getPosition() + new Vector2(75, 0));
@@ -1440,6 +1449,7 @@ namespace AmazingNewAccessoryLogic
                                 }
                                 break;
                             case 4:
+                                AmazingNewAccessoryLogic.Logger.LogDebug($"--> ClothingSlot A has full priority, and visible is {A.Visible}");
                                 if (i != 3)
                                 {
                                     LogicFlowNode input = getInput(A.ClothingSlot, A.ClothingState, outfit);
@@ -1480,8 +1490,8 @@ namespace AmazingNewAccessoryLogic
             {
                 _triggers = MessagePackSerializer.Deserialize<List<TriggerProperty>>((byte[])ByteData);
 #if KKS
-                AmazingNewAccessoryLogic.Logger.LogInfo(MakerAPI.LastLoadedChaFile.GetLastErrorCode());
-                AmazingNewAccessoryLogic.Logger.LogInfo(ChaFileControl.GetLastErrorCode());
+                //AmazingNewAccessoryLogic.Logger.LogInfo(MakerAPI.LastLoadedChaFile.GetLastErrorCode());
+                //AmazingNewAccessoryLogic.Logger.LogInfo(ChaFileControl.GetLastErrorCode());
                 if (kkcompatibility)
                 {
                     _triggers.ForEach(t => t.Coordinate = OutfitKK2KKS(t.Coordinate));
