@@ -38,6 +38,12 @@ namespace AmazingNewAccessoryLogic
 
         public static ConfigEntry<float> UIScaleModifier;
 
+        public static ConfigEntry<KeyCode> UIDeleteNodeKey;
+        public static ConfigEntry<KeyCode> UIDisableNodeKey;
+        public static ConfigEntry<KeyCode> UISelecetTreeKey;
+        public static ConfigEntry<KeyCode> UISelectNetworkKey;
+
+
         void Awake()
         {
             MakerAPI.MakerBaseLoaded += createMakerInteractables;
@@ -51,6 +57,20 @@ namespace AmazingNewAccessoryLogic
             AccessoriesApi.AccessoriesCopied += AccessoriesCopied;
 
             UIScaleModifier = Config.Bind("UI", "UI Scale Factor", Screen.height <= 1080 ? 1.3f : 1f, new ConfigDescription("Additional Scale to apply to the UI", new AcceptableValueRange<float>(0.5f, 2f)));
+
+            UIDeleteNodeKey = Config.Bind("Keybinds", "Delete Node", KeyCode.Delete, "Key press to delete the selected node(s)");
+            UIDeleteNodeKey.SettingChanged += KeyCodeSettingChanged;
+            UIDisableNodeKey = Config.Bind("Keybinds", "Disable Node", KeyCode.D, "Key press to disable the selected node(s)");
+            UIDisableNodeKey.SettingChanged += KeyCodeSettingChanged;
+            UISelecetTreeKey = Config.Bind("Keybinds", "Select Tree", KeyCode.T, "Key press to expand the selection to all downstream nodes");
+            UISelecetTreeKey.SettingChanged += KeyCodeSettingChanged;
+            UISelectNetworkKey = Config.Bind("Keybinds", "Select Network", KeyCode.N, "Key press to expand the selection to all down and upstream nodes");
+            UISelectNetworkKey.SettingChanged += KeyCodeSettingChanged;
+        }
+
+        private void KeyCodeSettingChanged(object sender, EventArgs e)
+        {
+            CharacterApi.GetRegisteredBehaviour(GUID).Instances.Do(ctrl => ((AnalCharaController)ctrl).UpdateGraphKeybinds());
         }
 
         void Start()

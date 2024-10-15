@@ -15,5 +15,6 @@
     <Compile Include="$(MSBuildThisFileDirectory)ANAL.SerialisedGraph.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)ANAL.SerialisedNode.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)ASS.TriggerProperty.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)ANAL.Hooks.cs" />
   </ItemGroup>
 </Project>
