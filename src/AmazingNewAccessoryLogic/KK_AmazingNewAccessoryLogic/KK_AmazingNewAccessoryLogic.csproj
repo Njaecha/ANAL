@@ -63,7 +63,7 @@
       <HintPath>..\..\..\..\_Libs_KK\KK_Fix_MakerOptimizations.dll</HintPath>
     </Reference>
     <Reference Include="Old.UnityLogicFlows">
-      <HintPath>..\..\..\..\_Libs_KK\Old.UnityLogicFlows.dll</HintPath>
+      <HintPath>..\..\..\lib\Old.UnityLogicFlows.dll</HintPath>
     </Reference>
     <Reference Include="RuntimeUnityEditor.Core, Version=5.3.0.0, Culture=neutral, processorArchitecture=MSIL">
       <HintPath>..\packages\RuntimeUnityEditor.Core.5.3.0\lib\net35\RuntimeUnityEditor.Core.dll</HintPath>
