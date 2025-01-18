@@ -1,8 +1,4 @@
-﻿using ActionGame.Chara.Mover;
-using BepInEx;
-using ChaCustom;
-using HarmonyLib;
-using System.Linq;
+﻿using HarmonyLib;
 using LogicFlows;
 
 namespace AmazingNewAccessoryLogic {

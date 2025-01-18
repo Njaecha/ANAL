@@ -1,19 +1,13 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
-using System.Linq;
-using KKAPI;
-using KKAPI.Chara;
-using ExtensibleSaveFormat;
-using MessagePack;
+﻿using KKAPI;
+using System;
 using LogicFlows;
+using System.Linq;
+using KKAPI.Chara;
+using MessagePack;
 using UnityEngine;
 using KKAPI.Maker;
-using RuntimeUnityEditor;
-using static Illusion.Component.UI.MouseButtonCheck;
-using static UnityEngine.GUI;
-using JetBrains.Annotations;
-using static ADV.Info;
+using ExtensibleSaveFormat;
+using System.Collections.Generic;
 
 namespace AmazingNewAccessoryLogic
 {

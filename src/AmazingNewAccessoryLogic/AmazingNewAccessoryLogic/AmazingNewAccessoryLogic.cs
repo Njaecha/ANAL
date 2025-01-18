@@ -1,21 +1,18 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
-using BepInEx;
-using LogicFlows;
-using UnityEngine;
-using BepInEx.Logging;
+﻿using UniRx;
 using KKAPI;
-using KKAPI.Maker;
-using KKAPI.Maker.UI.Sidebar;
-using UniRx;
-using KKAPI.Chara;
-using IllusionFixes;
-using BepInEx.Configuration;
-using KKAPI.Maker.UI;
-using KKAPI.Studio.UI;
-using KKAPI.Studio;
+using BepInEx;
 using HarmonyLib;
+using UnityEngine;
+using KKAPI.Maker;
+using KKAPI.Chara;
+using KKAPI.Studio;
+using IllusionFixes;
+using KKAPI.Maker.UI;
+using BepInEx.Logging;
+using KKAPI.Studio.UI;
+using BepInEx.Configuration;
+using KKAPI.Maker.UI.Sidebar;
+using System.Collections.Generic;
 
 namespace AmazingNewAccessoryLogic
 {
