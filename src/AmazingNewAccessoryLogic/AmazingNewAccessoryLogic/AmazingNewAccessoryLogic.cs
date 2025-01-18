@@ -51,6 +51,8 @@ namespace AmazingNewAccessoryLogic
             AccessoriesApi.AccessoriesCopied += AccessoriesCopied;
 
             UIScaleModifier = Config.Bind("UI", "UI Scale Factor", Screen.height <= 1080 ? 1.3f : 1f, new ConfigDescription("Additional Scale to apply to the UI", new AcceptableValueRange<float>(0.5f, 2f)));
+
+            Patches.Patch();
         }
 
         void Start()

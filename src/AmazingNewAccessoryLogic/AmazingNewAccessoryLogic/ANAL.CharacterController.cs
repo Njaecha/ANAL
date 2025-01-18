@@ -788,7 +788,7 @@ namespace AmazingNewAccessoryLogic
         /// <summary>
         /// Add a logic gate node to the current graph
         /// </summary>
-        /// <param name="type">0 = NOT, 1 = AND, 2 = OR, 3 = XOR</param>
+        /// <param name="type">0 = NOT, 1 = AND, 2 = OR, 3 = XOR, 4 = GRP</param>
         public LogicFlowGate addGate(byte type)
         {
             return addGate(ChaControl.fileStatus.coordinateType, type);
@@ -798,7 +798,7 @@ namespace AmazingNewAccessoryLogic
         /// Add a logic gate node to the specifed graph
         /// </summary>
         /// <param name="outfit">Outfit Slot</param>
-        /// <param name="type">0 = NOT, 1 = AND, 2 = OR, 3 = XOR</param>
+        /// <param name="type">0 = NOT, 1 = AND, 2 = OR, 3 = XOR, 4 = GRP</param>
         public LogicFlowGate addGate(int outfit, byte type)
         {
             if (graphs.ContainsKey(outfit))
@@ -817,6 +817,9 @@ namespace AmazingNewAccessoryLogic
                         break;
                     case 3:
                         gate = new LogicFlowNode_XOR(graphs[outfit]) { label = "XOR", toolTipText = "XOR" };
+                        break;
+                    case 4:
+                        gate = new LogicFlowNode_GRP(graphs[outfit]) { label = "GRP", toolTipText = "GRP" };
                         break;
                     default:
                         gate = new LogicFlowNode_NOT(graphs[outfit]) { label = "NOT", toolTipText = "NOT" };
@@ -1040,6 +1043,7 @@ namespace AmazingNewAccessoryLogic
                 if (GUILayout.Button("Add AND Gate", GUILayout.Height(30))) addGate(1);
                 if (GUILayout.Button("Add OR Gate", GUILayout.Height(30))) addGate(2);
                 if (GUILayout.Button("Add XOR Gate", GUILayout.Height(30))) addGate(3);
+                if (GUILayout.Button("Add Group Node", GUILayout.Height(30))) addGate(4);
                 GUILayout.Space(8);
                 if (GUILayout.Button("Advanced Inputs", GUILayout.Height(30))) showAdvancedInputWindow = !showAdvancedInputWindow;
                 GUILayout.Space(8);
