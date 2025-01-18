@@ -8,11 +8,15 @@ using UnityEngine;
 using KKAPI.Maker;
 using ExtensibleSaveFormat;
 using System.Collections.Generic;
+using ADV.Commands.Object;
 
 namespace AmazingNewAccessoryLogic
 {
     class AnalCharaController : CharaCustomFunctionController
     {
+        public const int advancedInputWindowID = 2233511;
+        public const int renameWindowID = 2233522;
+
         public LogicFlowGraph lfg { get => getCurrentGraph(); private set => setCurrentGraph(value); }
 
         internal static Dictionary<LogicFlowGraph, Dictionary<int, List<object>>> serialisationData = new Dictionary<LogicFlowGraph, Dictionary<int, List<object>>>();
@@ -800,7 +804,7 @@ namespace AmazingNewAccessoryLogic
                 LogicFlowGate gate;
                 switch (type)
                 {
-                    case 0:
+                    default:
                         gate = new LogicFlowNode_NOT(graphs[outfit]) { label = "NOT", toolTipText = "NOT" };
                         break;
                     case 1:
@@ -813,10 +817,7 @@ namespace AmazingNewAccessoryLogic
                         gate = new LogicFlowNode_XOR(graphs[outfit]) { label = "XOR", toolTipText = "XOR" };
                         break;
                     case 4:
-                        gate = new LogicFlowNode_GRP(graphs[outfit]) { label = "GRP", toolTipText = "GRP" };
-                        break;
-                    default:
-                        gate = new LogicFlowNode_NOT(graphs[outfit]) { label = "NOT", toolTipText = "NOT" };
+                        gate = new LogicFlowNode_GRP(graphs[outfit]);
                         break;
                 }
                 gate.setPosition(graphs[outfit].getSize()/2 - (gate.getSize() / 2));
@@ -937,6 +938,8 @@ namespace AmazingNewAccessoryLogic
 
             base.Update();
         }
+
+        #region OnGUI
 #if KKS
         private bool kkcompatibility = false;
 #endif
@@ -990,6 +993,10 @@ namespace AmazingNewAccessoryLogic
             "The generated graph can often be simplified a lot"
         };
 
+        private int? renamedNode = null;
+        private Rect renameRect = new Rect();
+        private string renameName = "";
+
         void OnGUI()
         {
             
@@ -998,7 +1005,7 @@ namespace AmazingNewAccessoryLogic
             {
                 if (showAdvancedInputWindow)
                 {
-                    advancedInputWindowRect = GUI.Window(2233511, advancedInputWindowRect, CustomInputWindowFunction, "", KKAPI.Utilities.IMGUIUtils.SolidBackgroundGuiSkin.window);
+                    advancedInputWindowRect = GUI.Window(advancedInputWindowID, advancedInputWindowRect, CustomInputWindowFunction, "", KKAPI.Utilities.IMGUIUtils.SolidBackgroundGuiSkin.window);
                 }
                 GUIStyle headerTextStyle = new GUIStyle(GUI.skin.label);
                 headerTextStyle.normal.textColor = Color.black;
@@ -1099,8 +1106,57 @@ namespace AmazingNewAccessoryLogic
                 #endregion
 
                 lfg.ongui();
+
+                #region Temporary IMGUI Elements
+                // Node renaming
+                if (renamedNode != null && !renameRect.Contains(Event.current.mousePosition)) renamedNode = null;
+                if (renamedNode != null) {
+                    renameRect = GUILayout.Window(renameWindowID, renameRect, (x) => {
+                        GUILayout.BeginVertical();
+                        renameName = GUILayout.TextArea(renameName);
+                        bool entered = false;
+                        if (renameName.Contains("\n")) {
+                            renameName = renameName.Replace("\n", "").Trim();
+                            entered = true;
+                        }
+                        if (GUILayout.Button("Rename") || entered) {
+                            renameName = renameName.Trim();
+                            switch (lfg.nodes[renamedNode.GetValueOrDefault()]) {
+                                case LogicFlowNode_GRP grp:
+                                    grp.setName(renameName);
+                                    break;
+                                case LogicFlowNode other:
+                                    other.label = renameName;
+                                    break;
+                            }
+                            renamedNode = null;
+                        }
+                        GUILayout.EndVertical();
+                    }, $"Renaming '{lfg.nodes[renamedNode.GetValueOrDefault()].label}'", KKAPI.Utilities.IMGUIUtils.SolidBackgroundGuiSkin.window);
+                    KKAPI.Utilities.IMGUIUtils.EatInputInRect(renameRect);
+                }
+                #endregion
+
+                #region EVENTS
+                Event e = Event.current;
+                if (e.isKey && e.type == EventType.KeyDown && e.keyCode == AmazingNewAccessoryLogic.RenameKey.Value) {
+                    foreach (var kvp in getCurrentGraph().nodes) {
+                        if (kvp.Value.mouseOver) {
+                            AmazingNewAccessoryLogic.Logger.LogMessage($"Renaming '{kvp.Value.toolTipText}'!");
+                            renamedNode = kvp.Key;
+                            if (kvp.Value is LogicFlowNode_GRP grp) renameName = grp.getName();
+                            else renameName = kvp.Value.label;
+                            renameRect = new Rect(e.mousePosition - new Vector2(120, 20), new Vector2(240, 40));
+                            break;
+                        }
+                    }
+                }
+                #endregion
+
+                KKAPI.Utilities.IMGUIUtils.EatInputInRect(new Rect(lfg.positionUI, lfg.sizeUI));
             }
         }
+        #endregion
 
         #region Advanced Input GUI
         private bool showAdvancedInputWindow = false;

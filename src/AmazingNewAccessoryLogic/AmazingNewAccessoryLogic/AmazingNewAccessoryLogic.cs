@@ -34,6 +34,7 @@ namespace AmazingNewAccessoryLogic
         public static AmazingNewAccessoryLogic Instance;
 
         public static ConfigEntry<float> UIScaleModifier;
+        public static ConfigEntry<KeyCode> RenameKey;
 
         void Awake()
         {
@@ -48,6 +49,7 @@ namespace AmazingNewAccessoryLogic
             AccessoriesApi.AccessoriesCopied += AccessoriesCopied;
 
             UIScaleModifier = Config.Bind("UI", "UI Scale Factor", Screen.height <= 1080 ? 1.3f : 1f, new ConfigDescription("Additional Scale to apply to the UI", new AcceptableValueRange<float>(0.5f, 2f)));
+            RenameKey = Config.Bind("Advanced", "Rename key", KeyCode.R, new ConfigDescription("Press this key to rename currently hovered graph node"));
 
             Patches.Patch();
         }

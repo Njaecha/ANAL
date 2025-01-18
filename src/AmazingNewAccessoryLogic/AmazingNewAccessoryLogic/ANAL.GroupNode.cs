@@ -4,19 +4,65 @@ using System.Collections.Generic;
 
 namespace AmazingNewAccessoryLogic {
     public class LogicFlowNode_GRP : LogicFlowGate {
-        public static object requestor = null;
+        public static LogicFlowNode requestor = null;
 
-        // These dictionaries are dic<controlledThing, dic<state, valueForState>>
-        int state = 0;
-        Dictionary<int, Dictionary<int, bool>> controlledAccs = new Dictionary<int, Dictionary<int, bool>>();
-        Dictionary<LogicFlowNode, Dictionary<int, bool>> controlledNodes = new Dictionary<LogicFlowNode, Dictionary<int, bool>>();
+        private int _state = 0;
+        internal int state {
+            get {
+                return _state;
+            }
+            set {
+                _state = value;
+                if (!controlledNodes.ContainsKey(_state)) {
+                    controlledNodes[_state] = new HashSet<LogicFlowNode>();
+                }
+            }
+        }
+
+        // dic<state, set<enabledThingForThisState>>
+        private Dictionary<int, HashSet<LogicFlowNode>> controlledNodes = new Dictionary<int, HashSet<LogicFlowNode>>();
 
         protected override Rect initRect() {
             return new Rect(50f, 50f, 40f, 20f);
         }
 
-        public LogicFlowNode_GRP(LogicFlowGraph parentGraph, int? key = null) : base(new int?[1], parentGraph, key) {
-            toolTipText = "GRP";
+        public LogicFlowNode_GRP(LogicFlowGraph parentGraph, int? key = null, string name = null) : base(new int?[1], parentGraph, key) {
+            setName(name ?? "GRP");
+            calcTooltip();
+        }
+
+        private void calcTooltip() {
+            int min = 0;
+            int max = 0;
+            foreach (var kvp in controlledNodes) {
+                if (kvp.Value.Count > 0) {
+                    if (kvp.Key < min) min = kvp.Key;
+                    if (kvp.Key > max) max = kvp.Key;
+                }
+            }
+            toolTipText = $"Group Node (Min: {min}, Max: {max})";
+        }
+
+        public void addActiveNode(LogicFlowNode node, int? __state = null) {
+            int stateToAddTo = __state.GetValueOrDefault(state);
+            if (!controlledNodes.ContainsKey(stateToAddTo)) controlledNodes[stateToAddTo] = new HashSet<LogicFlowNode>();
+            controlledNodes[stateToAddTo].Add(node);
+            calcTooltip();
+        }
+
+        public void removeActiveNode(LogicFlowNode node, int? __state = null) {
+            int stateToRemoveFrom = __state.GetValueOrDefault(state);
+            if (!controlledNodes.ContainsKey(stateToRemoveFrom)) return;
+            controlledNodes[stateToRemoveFrom].Remove(node);
+            calcTooltip();
+        }
+
+        public void setName(string newName) {
+            label = $"{newName}: {state}";
+        }
+
+        public string getName() {
+            return label.TrimEnd(new[] { '-', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', ':', ' ' }).Trim();
         }
 
         public override void drawSymbol() {
@@ -36,14 +82,10 @@ namespace AmazingNewAccessoryLogic {
             LogicFlowNode_GRP clonedGroup = new LogicFlowNode_GRP(parentGraph) {
                 label = label,
                 toolTipText = toolTipText,
-                controlledAccs = new Dictionary<int, Dictionary<int, bool>>(controlledAccs),
-                controlledNodes = new Dictionary<LogicFlowNode, Dictionary<int, bool>>(controlledNodes),
+                controlledNodes = new Dictionary<int, HashSet<LogicFlowNode>>(controlledNodes),
             };
-            foreach (var key in controlledAccs.Keys) {
-                clonedGroup.controlledAccs[key] = new Dictionary<int, bool>(controlledAccs[key]);
-            }
             foreach (var key in controlledNodes.Keys) {
-                clonedGroup.controlledNodes[key] = new Dictionary<int, bool>(controlledNodes[key]);
+                clonedGroup.controlledNodes[key] = new HashSet<LogicFlowNode>(controlledNodes[key]);
             }
             clonedGroup.setPositionUI(rect.position + new Vector2(20f, 20f));
         }
@@ -53,19 +95,7 @@ namespace AmazingNewAccessoryLogic {
                 return false;
             }
 
-            bool result;
-            switch (requestor) {
-                case int acc:
-                    result = controlledAccs.TryGetValue(acc, out var setAccs) && setAccs.TryGetValue(state, out var valAcc) && valAcc;
-                    break;
-                case LogicFlowNode node:
-                    result = controlledNodes.TryGetValue(node, out var setNodes) && setNodes.TryGetValue(state, out var valNode) && valNode;
-                    break;
-                default:
-                    result = false;
-                    break;
-            }
-
+            bool result = controlledNodes.TryGetValue(state, out var setNodes) && setNodes.Contains(requestor);
             requestor = null;
             return result;
         }
