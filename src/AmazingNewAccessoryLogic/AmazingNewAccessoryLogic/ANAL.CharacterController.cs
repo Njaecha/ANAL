@@ -246,7 +246,7 @@ namespace AmazingNewAccessoryLogic
                     node = addAdvancedInputEyebrowPattern((int)sNode.data2[1],sNode.postion, outfit,sNode.index);
                     break;
                 case AdvancedInputType.Accessory:
-                    node = addAdvanedInputAccessory((int)sNode.data2[1], sNode.postion, outfit, sNode.index);
+                    node = addAdvancedInputAccessory((int)sNode.data2[1], sNode.postion, outfit, sNode.index);
                     break;
             }
             return node;
@@ -552,9 +552,9 @@ namespace AmazingNewAccessoryLogic
             }
         }
 
-        #region Advnaced Inputs
+        #region Advanced Inputs
 
-        public LogicFlowNode addAdvanedInputAccessory(int slot, Vector2 pos, int? outfit = null, int? index = null)
+        public LogicFlowNode addAdvancedInputAccessory(int slot, Vector2 pos, int? outfit = null, int? index = null)
         {
             LogicFlowGraph g;
             if (!outfit.HasValue) g = lfg;

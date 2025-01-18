@@ -121,7 +121,7 @@ namespace AmazingNewAccessoryLogic
             {
                 showGraphInMaker(true);
                 AnalCharaController analCharaController = MakerAPI.GetCharacterControl()?.GetComponent<AnalCharaController>();
-                analCharaController?.addAdvanedInputAccessory(AccessoriesApi.SelectedMakerAccSlot, analCharaController.lfg.getSize()/2);
+                analCharaController?.addAdvancedInputAccessory(AccessoriesApi.SelectedMakerAccSlot, analCharaController.lfg.getSize()/2);
             });
         }
 
