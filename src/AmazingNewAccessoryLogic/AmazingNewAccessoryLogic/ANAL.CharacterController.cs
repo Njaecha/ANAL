@@ -6,16 +6,18 @@ using KKAPI.Chara;
 using MessagePack;
 using UnityEngine;
 using KKAPI.Maker;
+using System.Collections;
 using ExtensibleSaveFormat;
 using System.Collections.Generic;
-using ADV.Commands.Object;
 
 namespace AmazingNewAccessoryLogic
 {
     class AnalCharaController : CharaCustomFunctionController
     {
+        public const int normalInputWindowID = 2233500;
         public const int advancedInputWindowID = 2233511;
         public const int renameWindowID = 2233522;
+        public const int groupSelectWindowID = 2233533;
 
         public LogicFlowGraph lfg { get => getCurrentGraph(); private set => setCurrentGraph(value); }
 
@@ -940,6 +942,8 @@ namespace AmazingNewAccessoryLogic
         }
 
         #region OnGUI
+        private Rect normalInputRect = new Rect(0, 0, 130, 20);
+
 #if KKS
         private bool kkcompatibility = false;
 #endif
@@ -997,12 +1001,19 @@ namespace AmazingNewAccessoryLogic
         private Rect renameRect = new Rect();
         private string renameName = "";
 
+        internal LogicFlowNode_GRP groupToSetActives = null;
+        private List<LogicFlowNode> groupConnections = null;
+        private Rect groupScrollRect = new Rect();
+        private Vector2 groupScrollPos = Vector2.zero;
+
         void OnGUI()
         {
             
             if (lfg == null) return;
             if (displayGraph)
             {
+                var solidSkin = KKAPI.Utilities.IMGUIUtils.SolidBackgroundGuiSkin;
+
                 if (showAdvancedInputWindow)
                 {
                     advancedInputWindowRect = GUI.Window(advancedInputWindowID, advancedInputWindowRect, CustomInputWindowFunction, "", KKAPI.Utilities.IMGUIUtils.SolidBackgroundGuiSkin.window);
@@ -1016,71 +1027,62 @@ namespace AmazingNewAccessoryLogic
                     headerTextStyle.padding.top = 0;
                     headerTextStyle.padding.bottom = 0;
                     headerTextStyle.padding.left = 1;
-                }
-                
+                }      
 
                 GUI.DrawTexture(new Rect(0, 0, Screen.width, Screen.height), rTex);
 
-                int boxSize = 270;
-#if KKS
-                boxSize += 30;
-#endif
-                if (KKAPI.Studio.StudioAPI.InsideStudio) boxSize += 60;
-
-
                 GUI.Label(new Rect(screenToGUI(lfg.positionUI + new Vector2(10, lfg.sizeUI.y + (lfg.getUIScale() * 20) + 15)), new Vector2(250, 25)), $"AmazingNewAccessoryLogic v{AmazingNewAccessoryLogic.Version}", headerTextStyle);
-                if (GUI.Button(new Rect(screenToGUI(lfg.positionUI + lfg.sizeUI + new Vector2(-65, (lfg.getUIScale() * 28) + 4)), new Vector2(60, (lfg.getUIScale() * 10) +10)), "Close"))
-                {
-                    this.Hide();
+                if (GUI.Button(new Rect(screenToGUI(lfg.positionUI + lfg.sizeUI + new Vector2(-65, (lfg.getUIScale() * 28) + 4)), new Vector2(60, (lfg.getUIScale() * 10) +10)), "Close")) {
+                    Hide();
                 }
 
-                GUI.Box(new Rect(screenToGUI(lfg.positionUI + lfg.sizeUI + new Vector2(5, 0)), new Vector2(130, boxSize)), "");
+                normalInputRect.position = screenToGUI(lfg.positionUI + lfg.sizeUI + new Vector2(5, 0));
+                normalInputRect = GUILayout.Window(normalInputWindowID, normalInputRect, (x) => {
+                    GUILayout.BeginVertical();
 
-                GUILayout.BeginArea(new Rect(screenToGUI(lfg.positionUI + lfg.sizeUI + new Vector2(10, -5)), new Vector2(120, boxSize-10)));
-                GUILayout.BeginVertical();
-
-                // add nodes buttons
-                if (GUILayout.Button("Add NOT Gate", GUILayout.Height(30))) addGate(0);
-                if (GUILayout.Button("Add AND Gate", GUILayout.Height(30))) addGate(1);
-                if (GUILayout.Button("Add OR Gate", GUILayout.Height(30))) addGate(2);
-                if (GUILayout.Button("Add XOR Gate", GUILayout.Height(30))) addGate(3);
-                if (GUILayout.Button("Add Group Node", GUILayout.Height(30))) addGate(4);
-                GUILayout.Space(8);
-                if (GUILayout.Button("Advanced Inputs", GUILayout.Height(30))) showAdvancedInputWindow = !showAdvancedInputWindow;
-                GUILayout.Space(8);
+                    // add nodes buttons
+                    if (GUILayout.Button("Add NOT Gate", GUILayout.Height(30))) addGate(0);
+                    if (GUILayout.Button("Add AND Gate", GUILayout.Height(30))) addGate(1);
+                    if (GUILayout.Button("Add OR Gate", GUILayout.Height(30))) addGate(2);
+                    if (GUILayout.Button("Add XOR Gate", GUILayout.Height(30))) addGate(3);
+                    if (GUILayout.Button("Add Group Node", GUILayout.Height(30))) addGate(4);
+                    GUILayout.Space(8);
+                    if (GUILayout.Button("Advanced Inputs", GUILayout.Height(30))) showAdvancedInputWindow = !showAdvancedInputWindow;
+                    GUILayout.Space(8);
 #if KKS
-                kkcompatibility = GUILayout.Toggle(kkcompatibility, "KK Compatiblity");
+                    kkcompatibility = GUILayout.Toggle(kkcompatibility, "KK Compatiblity");
 #endif
-                if (GUILayout.Button(fullCharacter ? "◀ All Outfits ▶" : "◀ Current Outfit ▶")) fullCharacter = !fullCharacter;
-                if (GUILayout.Button("Load from ASS"))
-                {
-                    if (fullCharacter) TranslateFromAssForCharacter();
-                    else if (ExtendedSave.GetExtendedDataById(ChaControl.nowCoordinate, "madevil.kk.ass") == null) TranslateFromAssForCharacter(ChaControl.fileStatus.coordinateType);
-                    else TranslateFromAssForCoordinate();
-                }
-                GUILayout.Space(8);
-                if (GUILayout.Button("Show Help")) showHelp = !showHelp;
-                GUILayout.Space(8);
-                
-                #region Studio Output Widget
-                if (KKAPI.Studio.StudioAPI.InsideStudio)
-                {
-                    GUILayout.BeginHorizontal();
-                    studioAddOutputTextInput = GUILayout.TextField(studioAddOutputTextInput);
-                    if (GUILayout.Button("+", GUILayout.Width(25)) && int.TryParse(studioAddOutputTextInput, out int a)) studioAddOutputTextInput = (a + 1).ToString();
-                    if (GUILayout.Button("-", GUILayout.Width(25)) && int.TryParse(studioAddOutputTextInput, out int b) && b > 1) studioAddOutputTextInput = (b - 1).ToString();
-                    GUILayout.EndHorizontal();
-                    if (GUILayout.Button("Add Output"))
+                    if (GUILayout.Button(fullCharacter ? "◀ All Outfits ▶" : "◀ Current Outfit ▶")) fullCharacter = !fullCharacter;
+                    if (GUILayout.Button("Load from ASS"))
                     {
-                        if (int.TryParse(studioAddOutputTextInput, out int slot) && slot >= 1)
+                        if (fullCharacter) TranslateFromAssForCharacter();
+                        else if (ExtendedSave.GetExtendedDataById(ChaControl.nowCoordinate, "madevil.kk.ass") == null) TranslateFromAssForCharacter(ChaControl.fileStatus.coordinateType);
+                        else TranslateFromAssForCoordinate();
+                    }
+                    GUILayout.Space(8);
+                    if (GUILayout.Button("Show Help")) showHelp = !showHelp;
+                    GUILayout.Space(8);
+                
+                    #region Studio Output Widget
+                    if (KKAPI.Studio.StudioAPI.InsideStudio)
+                    {
+                        GUILayout.BeginHorizontal();
+                        studioAddOutputTextInput = GUILayout.TextField(studioAddOutputTextInput);
+                        if (GUILayout.Button("+", GUILayout.Width(25)) && int.TryParse(studioAddOutputTextInput, out int a)) studioAddOutputTextInput = (a + 1).ToString();
+                        if (GUILayout.Button("-", GUILayout.Width(25)) && int.TryParse(studioAddOutputTextInput, out int b) && b > 1) studioAddOutputTextInput = (b - 1).ToString();
+                        GUILayout.EndHorizontal();
+                        if (GUILayout.Button("Add Output"))
                         {
-                            addOutput(slot - 1);
+                            if (int.TryParse(studioAddOutputTextInput, out int slot) && slot >= 1)
+                            {
+                                addOutput(slot - 1);
+                            }
                         }
                     }
-                }
-                #endregion
-                GUILayout.EndVertical();
-                GUILayout.EndArea();
+                    #endregion
+                    GUILayout.EndVertical();
+                }, "", solidSkin.window, GUILayout.ExpandWidth(false));
+                KKAPI.Utilities.IMGUIUtils.EatInputInRect(normalInputRect);
 
                 #region HELP
                 if (showHelp)
@@ -1105,11 +1107,12 @@ namespace AmazingNewAccessoryLogic
                 }
                 #endregion
 
-                lfg.ongui();
-
                 #region Temporary IMGUI Elements
+                Vector2 expansion = new Vector2(10, 10);
                 // Node renaming
-                if (renamedNode != null && !renameRect.Contains(Event.current.mousePosition)) renamedNode = null;
+                if (renamedNode != null && !new Rect(renameRect.position - expansion, renameRect.size + 2 * expansion).Contains(Event.current.mousePosition)) {
+                    renamedNode = null;
+                }
                 if (renamedNode != null) {
                     renameRect = GUILayout.Window(renameWindowID, renameRect, (x) => {
                         GUILayout.BeginVertical();
@@ -1132,27 +1135,71 @@ namespace AmazingNewAccessoryLogic
                             renamedNode = null;
                         }
                         GUILayout.EndVertical();
-                    }, $"Renaming '{lfg.nodes[renamedNode.GetValueOrDefault()].label}'", KKAPI.Utilities.IMGUIUtils.SolidBackgroundGuiSkin.window);
+                    }, $"Renaming '{lfg.nodes[renamedNode.GetValueOrDefault()].label}'", solidSkin.window);
+                    GUI.BringWindowToFront(renameWindowID);
                     KKAPI.Utilities.IMGUIUtils.EatInputInRect(renameRect);
+                }
+                // Group connection selection
+                if (groupToSetActives != null && !new Rect(groupScrollRect.position - expansion, groupScrollRect.size + 2 * expansion).Contains(Event.current.mousePosition)) {
+                    groupToSetActives = null;
+                }
+                if (groupToSetActives != null) {
+                    groupScrollRect = GUILayout.Window(groupSelectWindowID, groupScrollRect, (x) => {
+                        groupScrollPos = GUILayout.BeginScrollView(groupScrollPos, false, true, solidSkin.horizontalScrollbar, solidSkin.verticalScrollbar, GUILayout.Width(240f));
+                        foreach (var node in groupConnections) {
+                            bool active = groupToSetActives.getActive(node);
+                            if (GUILayout.Button((active ? "--- " : "") + node.label + (active ? ": On ---" : ": Off"), solidSkin.button)) {
+                                if (active) {
+                                    groupToSetActives.removeActiveNode(node);
+                                } else {
+                                    groupToSetActives.addActiveNode(node);
+                                }
+                            }
+                        }
+                        GUILayout.EndScrollView();
+                    }, $"Accs for state {groupToSetActives.state}", solidSkin.window);
+                    GUI.BringWindowToFront(groupSelectWindowID);
+                    KKAPI.Utilities.IMGUIUtils.EatInputInRect(groupScrollRect);
                 }
                 #endregion
 
+                lfg.ongui();
+
                 #region EVENTS
                 Event e = Event.current;
-                if (e.isKey && e.type == EventType.KeyDown && e.keyCode == AmazingNewAccessoryLogic.RenameKey.Value) {
+                if (e.isMouse && e.button == 1 && e.type == EventType.MouseUp) {
                     foreach (var kvp in getCurrentGraph().nodes) {
-                        if (kvp.Value.mouseOver) {
-                            renamedNode = kvp.Key;
-                            if (kvp.Value is LogicFlowNode_GRP grp) renameName = grp.getName();
-                            else renameName = kvp.Value.label;
-                            renameRect = new Rect(e.mousePosition - new Vector2(120, 20), new Vector2(240, 40));
-                            break;
+                        { // Renaming
+                            if (kvp.Value.mouseOver) {
+                                renamedNode = kvp.Key;
+                                if (kvp.Value is LogicFlowNode_GRP grp) renameName = grp.getName();
+                                else renameName = kvp.Value.label;
+                                renameRect = new Rect(e.mousePosition - new Vector2(120, 20), new Vector2(240, 40));
+                                break;
+                            }
+                        }
+                        { // Group activation selection
+                            if (kvp.Value.outputHovered && kvp.Value is LogicFlowNode_GRP grp) {
+                                groupToSetActives = grp;
+                                groupScrollRect = new Rect(e.mousePosition - new Vector2(-5, 120), new Vector2(120, 240));
+                                groupConnections = getCurrentGraph().nodes.Values.Where(x => x.inputs.Any(y => y == grp.index)).ToList();
+                                break;
+                            }
+                        }
+                    }
+                }
+                if (e.isMouse && (e.button == 0 || e.button == 1) && e.type == EventType.MouseUp) {
+                    foreach (var kvp in getCurrentGraph().nodes) {
+                        if (kvp.Value.inputHovered != null && kvp.Value is LogicFlowOutput output) {
+                            StartCoroutine(updateLater());
+                            IEnumerator updateLater() {
+                                yield return null;
+                                output.forceUpdate();
+                            }
                         }
                     }
                 }
                 #endregion
-
-                KKAPI.Utilities.IMGUIUtils.EatInputInRect(new Rect(lfg.positionUI, lfg.sizeUI));
             }
         }
         #endregion

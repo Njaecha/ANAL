@@ -36,14 +36,14 @@ namespace AmazingNewAccessoryLogic {
             [HarmonyPatch(typeof(LogicFlowNode), "drawLabel")]
             private static bool LogicFlowNodeBeforeDrawLabel(LogicFlowNode __instance) {
                 if (__instance is LogicFlowNode_GRP grp) {
-                    GUIStyle guistyle = new GUIStyle(GUI.skin.box) {
-                        alignment = TextAnchor.MiddleCenter,
-                        fontSize = (int)(14f * grp.parentGraph.getUIScale())
-                    };
-                    guistyle.normal.textColor = Color.black;
-                    guistyle.padding.top = (guistyle.padding.bottom = (guistyle.padding.left = (guistyle.padding.right = 0)));
-                    guistyle.normal.background = LogicFlowBox.GetBackground();
                     if (!grp.label.IsNullOrEmpty()) {
+                        GUIStyle guistyle = new GUIStyle(GUI.skin.box) {
+                            alignment = TextAnchor.MiddleCenter,
+                            fontSize = (int)(14f * grp.parentGraph.getUIScale())
+                        };
+                        guistyle.normal.textColor = Color.black;
+                        guistyle.padding.top = (guistyle.padding.bottom = (guistyle.padding.left = (guistyle.padding.right = 0)));
+                        guistyle.normal.background = LogicFlowBox.GetBackground();
                         float labelWidth = guistyle.CalcSize(new GUIContent(grp.label)).x + 5f;
                         float left = grp.parentGraph.A.x + (grp.C.x + grp.B.x - labelWidth) / 2;
                         float top = Screen.height - (grp.parentGraph.A.y + grp.B.y) - grp.parentGraph.getUIScale() * 25f;
@@ -52,11 +52,9 @@ namespace AmazingNewAccessoryLogic {
                         GUI.Label(new Rect(left, top, width, height), grp.label, guistyle);
                         if (GUI.Button(new Rect(left - height - 3, top, height, height), "<", guistyle)) {
                             grp.state--;
-                            grp.setName(grp.getName());
                         }
                         if (GUI.Button(new Rect(left + width + 3, top, height, height), ">", guistyle)) {
                             grp.state++;
-                            grp.setName(grp.getName());
                         }
                     }
                     return false;
