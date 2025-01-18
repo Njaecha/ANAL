@@ -49,7 +49,7 @@ namespace AmazingNewAccessoryLogic {
         }
 
         public override bool getValue() {
-            if (!enabled || requestor == null) {
+            if (!enabled || requestor == null || !(inputAt(0)?.getValue() ?? true)) {
                 return false;
             }
 
