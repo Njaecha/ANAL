@@ -1142,7 +1142,6 @@ namespace AmazingNewAccessoryLogic
                 if (e.isKey && e.type == EventType.KeyDown && e.keyCode == AmazingNewAccessoryLogic.RenameKey.Value) {
                     foreach (var kvp in getCurrentGraph().nodes) {
                         if (kvp.Value.mouseOver) {
-                            AmazingNewAccessoryLogic.Logger.LogMessage($"Renaming '{kvp.Value.toolTipText}'!");
                             renamedNode = kvp.Key;
                             if (kvp.Value is LogicFlowNode_GRP grp) renameName = grp.getName();
                             else renameName = kvp.Value.label;
