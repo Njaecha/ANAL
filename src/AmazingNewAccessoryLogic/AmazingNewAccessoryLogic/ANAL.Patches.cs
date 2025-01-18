@@ -28,7 +28,7 @@ namespace AmazingNewAccessoryLogic {
                 _harmony.UnpatchSelf();
             }
 
-            // Disable updating the UI when switching to the All option
+            // Set requestor field of the GRP node class so getValue knows what is requesting the current value
             [HarmonyPostfix]
             [HarmonyPatch(typeof(LogicFlowNode), "inputAt")]
             private static void LogicFlowNodeAfterInputAt(LogicFlowNode __result, LogicFlowNode __instance) {
