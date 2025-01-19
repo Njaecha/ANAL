@@ -134,7 +134,23 @@ namespace AmazingNewAccessoryLogic
                 sn.data = new List<int>();
             }
             sn.data3 = new Dictionary<int, List<int>>();
-            foreach (var kvp in grp.controlledNodes.Select(x => new KeyValuePair<int, List<int>>(x.Key, x.Value.ToList().Select(y => y.index).ToList()))) {
+            foreach (var kvp in grp.controlledNodes
+                .Where(x => x.Value.Count > 0)
+                .Select(x =>
+                    new KeyValuePair<int, List<int>>(
+                        x.Key,
+                        x.Value
+                            .Where(y =>
+                                y.inputs.Any(z =>
+                                    z != null &&
+                                    graph.getNodeAt(z.Value) == grp
+                                )
+                            )
+                            .Select(y => y.index)
+                            .ToList()
+                    )
+                )
+            ) {
                 sn.data3[kvp.Key] = kvp.Value;
             }
             sn.name = grp.getName();
