@@ -78,7 +78,7 @@ namespace AmazingNewAccessoryLogic
                         deserialiseGraph(outfit, sGraphs[outfit]);
                         AmazingNewAccessoryLogic.Logger.LogDebug($"Loaded Logic Graph for outfit {outfit}");
                     }
-                    lfg.ForceUpdate();
+                    lfg?.ForceUpdate();
                 }
             }
         }
@@ -128,7 +128,7 @@ namespace AmazingNewAccessoryLogic
                         deserialiseGraph(ChaControl.fileStatus.coordinateType, sGraph);
                         AmazingNewAccessoryLogic.Logger.LogDebug($"Loaded Logic Graph for outfit {ChaControl.fileStatus.coordinateType}");
                     }
-                    lfg.ForceUpdate();
+                    lfg?.ForceUpdate();
                 }
             }
         }
