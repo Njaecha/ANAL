@@ -776,7 +776,7 @@ namespace AmazingNewAccessoryLogic
             {
                 if (activeSlots.ContainsKey(outfit.Value) && activeSlots[outfit.Value].Contains(slot)) return null;
                 activeSlots[outfit.Value].Add(slot);
-                LogicFlowOutput output = new LogicFlowOutput_Action((value) => setAccessoryState(slot, value), graphs[outfit.Value], key: 1000000 + slot) { label = name ?? $"Slot {slot + 1}", toolTipText = null };
+                LogicFlowOutput output = new LogicFlowOutput_Action((value) => setAccessoryState(slot, value), graphs[outfit.Value], key: 1000000 + slot) { label = name ?? $"Slot {slot + 1}", toolTipText = $"Slot {slot + 1}" };
                 output.setPosition(new Vector2(
                     graphs[outfit.Value].getSize().x - 80,
                     graphs[outfit.Value].getSize().y - 50 * (activeSlots[outfit.Value].Count))
@@ -1032,6 +1032,7 @@ namespace AmazingNewAccessoryLogic
             if (displayGraph)
             {
                 var solidSkin = KKAPI.Utilities.IMGUIUtils.SolidBackgroundGuiSkin;
+                Rect guiRect = new Rect(screenToGUI(lfg.positionUI), new Vector2(lfg.sizeUI.x, -lfg.sizeUI.y));
 
                 if (showAdvancedInputWindow)
                 {
@@ -1186,10 +1187,11 @@ namespace AmazingNewAccessoryLogic
 
                 #region EVENTS
                 Event e = Event.current;
-                if (e.isMouse && e.button == 1 && e.type == EventType.MouseUp) {
+                if (e.isMouse && e.type == EventType.MouseUp && guiRect.Contains(e.mousePosition, true)) {
                     foreach (var kvp in getCurrentGraph().nodes) {
                         { // Renaming
-                            if (kvp.Value.mouseOver) {
+                            if (e.button == 1 && kvp.Value.mouseOver) {
+                                AmazingNewAccessoryLogic.Logger.LogDebug($"Renaming ({kvp.Value.label})!");
                                 renamedNode = kvp.Key;
                                 if (kvp.Value is LogicFlowNode_GRP grp) renameName = grp.getName();
                                 else renameName = kvp.Value.label;
@@ -1198,22 +1200,24 @@ namespace AmazingNewAccessoryLogic
                             }
                         }
                         { // Group activation selection
-                            if (kvp.Value.outputHovered && kvp.Value is LogicFlowNode_GRP grp) {
+                            if (e.button == 1 && kvp.Value.outputHovered && kvp.Value is LogicFlowNode_GRP grp) {
+                                AmazingNewAccessoryLogic.Logger.LogDebug($"Selecting outputs for ({grp.getName()})...");
                                 groupToSetActives = grp;
                                 groupScrollRect = new Rect(e.mousePosition - new Vector2(-5, 120), new Vector2(120, 240));
                                 groupConnections = getCurrentGraph().nodes.Values.Where(x => x.inputs.Any(y => y == grp.index)).ToList();
+                                groupConnections.Sort((x, y) => y.label.CompareTo(x.label));
                                 break;
                             }
                         }
-                    }
-                }
-                if (e.isMouse && (e.button == 0 || e.button == 1) && e.type == EventType.MouseUp) {
-                    foreach (var kvp in getCurrentGraph().nodes) {
-                        if (kvp.Value.inputHovered != null && kvp.Value is LogicFlowOutput output) {
-                            StartCoroutine(updateLater());
-                            IEnumerator updateLater() {
-                                yield return null;
-                                output.forceUpdate();
+                        { // New node connection
+                            if ((e.button == 0 || e.button == 1) && kvp.Value.inputHovered != null && kvp.Value is LogicFlowOutput output) {
+                                AmazingNewAccessoryLogic.Logger.LogDebug($"New connection to ({output.label}), syncing!");
+                                StartCoroutine(updateLater());
+                                break;
+                                IEnumerator updateLater() {
+                                    yield return null;
+                                    output.forceUpdate();
+                                }
                             }
                         }
                     }
