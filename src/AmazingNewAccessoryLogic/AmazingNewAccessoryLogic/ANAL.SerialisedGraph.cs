@@ -10,12 +10,14 @@ namespace AmazingNewAccessoryLogic
     [MessagePackObject]
     public class SerialisedGraph
     {
+        [Key("Advanced")]
+        public bool advanced { get; set; }
         [Key("Size")]
         public Vector2 size { get; set; }
         [Key("Nodes")]
         public List<SerialisedNode> nodes { get; set; }
 
-        public static SerialisedGraph Serialise(LogicFlowGraph graph)
+        public static SerialisedGraph Serialise(LogicFlowGraph graph, bool advanced = false)
         {
             SerialisedGraph sg = new SerialisedGraph();
             sg.size = graph.getSize();
@@ -28,6 +30,7 @@ namespace AmazingNewAccessoryLogic
                     nodeList.Add(sNode);
                 }
             }
+            sg.advanced = advanced;
             sg.nodes = nodeList;
             return sg;
         }

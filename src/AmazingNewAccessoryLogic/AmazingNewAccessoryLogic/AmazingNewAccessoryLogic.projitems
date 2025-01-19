@@ -12,6 +12,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)AmazingNewAccessoryLogic.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)ANAL.CameraComponent.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)ANAL.CharacterController.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)ANAL.GraphData.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)ANAL.Patches.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)ANAL.SerialisedGraph.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)ANAL.SerialisedNode.cs" />
