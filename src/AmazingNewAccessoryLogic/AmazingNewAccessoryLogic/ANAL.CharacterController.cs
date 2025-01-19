@@ -33,8 +33,6 @@ namespace AmazingNewAccessoryLogic
         private RenderTexture rTex;
         private Camera rCam;
 
-        private byte[] oldClothStates;
-
         #region GameEvetns
         protected override void OnCardBeingSaved(GameMode currentGameMode)
         {
@@ -80,6 +78,7 @@ namespace AmazingNewAccessoryLogic
                         deserialiseGraph(outfit, sGraphs[outfit]);
                         AmazingNewAccessoryLogic.Logger.LogDebug($"Loaded Logic Graph for outfit {outfit}");
                     }
+                    lfg.ForceUpdate();
                 }
             }
         }
@@ -129,6 +128,7 @@ namespace AmazingNewAccessoryLogic
                         deserialiseGraph(ChaControl.fileStatus.coordinateType, sGraph);
                         AmazingNewAccessoryLogic.Logger.LogDebug($"Loaded Logic Graph for outfit {ChaControl.fileStatus.coordinateType}");
                     }
+                    lfg.ForceUpdate();
                 }
             }
         }
@@ -176,49 +176,66 @@ namespace AmazingNewAccessoryLogic
             graphs.Add(outfit, new LogicFlowGraph(new Rect(new Vector2(200,200), graph.size)));
             activeSlots[outfit] = new List<int>();
             graphs[outfit].isLoading = true;
-            foreach (SerialisedNode node in graph.nodes) deserialiseNode(outfit, node);
+            foreach (SerialisedNode node in graph.nodes.Where(x => x.type != SerialisedNode.NodeType.Gate_GRP)) deserialiseNode(outfit, node);
+            foreach (SerialisedNode node in graph.nodes.Where(x => x.type == SerialisedNode.NodeType.Gate_GRP)) deserialiseNode(outfit, node);
             graphs[outfit].isLoading = false;
         }
 
+        SerialisedNode lastSnode = null;
         private void deserialiseNode(int outfit, SerialisedNode sNode)
         {
             LogicFlowNode node = null;
-            switch (sNode.type)
-            {
+            lastSnode = sNode;
+            switch (sNode.type) {
                 case SerialisedNode.NodeType.Gate_NOT:
-                    node = new LogicFlowNode_NOT(graphs[outfit], key: sNode.index) { label = "NOT", toolTipText = "NOT" };
-                    node.SetInput(sNode.data[0], 0);
+                    node = new LogicFlowNode_NOT(graphs[outfit], key: sNode.index) { label = sNode.name ?? "NOT", toolTipText = "NOT" };
+                    if (sNode.data?.Count > 0) node.SetInput(sNode.data[0], 0);
                     break;
                 case SerialisedNode.NodeType.Gate_AND:
-                    node = new LogicFlowNode_AND(graphs[outfit], key: sNode.index) { label = "AND", toolTipText = "AND" };
-                    node.SetInput(sNode.data[0], 0);
-                    node.SetInput(sNode.data[1], 1);
+                    node = new LogicFlowNode_AND(graphs[outfit], key: sNode.index) { label = sNode.name ?? "AND", toolTipText = "AND" };
+                    for (int i = 0; i < sNode.data?.Count; i++) {
+                        node.SetInput(sNode.data[i], i);
+                    }
                     break;
                 case SerialisedNode.NodeType.Gate_OR:
-                    node = new LogicFlowNode_OR(graphs[outfit], key: sNode.index) { label = "OR", toolTipText = "OR" };
-                    node.SetInput(sNode.data[0], 0);
-                    node.SetInput(sNode.data[1], 1);
+                    node = new LogicFlowNode_OR(graphs[outfit], key: sNode.index) { label = sNode.name ?? "OR", toolTipText = "OR" };
+                    for (int i = 0; i < sNode.data?.Count; i++) {
+                        node.SetInput(sNode.data[i], i);
+                    }
                     break;
                 case SerialisedNode.NodeType.Gate_XOR:
-                    node = new LogicFlowNode_XOR(graphs[outfit], key: sNode.index) { label = "XOR", toolTipText = "XOR" };
-                    node.SetInput(sNode.data[0], 0);
-                    node.SetInput(sNode.data[1], 1);
+                    node = new LogicFlowNode_XOR(graphs[outfit], key: sNode.index) { label = sNode.name ?? "XOR", toolTipText = "XOR" };
+                    for (int i = 0; i < sNode.data?.Count; i++) {
+                        node.SetInput(sNode.data[i], i);
+                    }
+                    break;
+                case SerialisedNode.NodeType.Gate_GRP:
+                    node = new LogicFlowNode_GRP(graphs[outfit], key: sNode.index, sNode.name);
+                    if (sNode.data?.Count > 0) node.SetInput(sNode.data[0], 0);
+                    if (sNode.data3 != null) {
+                        foreach (var kvp in sNode.data3) {
+                            var hashEntry = new HashSet<LogicFlowNode>();
+                            foreach (var idx in kvp.Value) hashEntry.Add(graphs[outfit].getNodeAt(idx));
+                            (node as LogicFlowNode_GRP).controlledNodes.Add(kvp.Key, hashEntry);
+                        }
+                    }
                     break;
                 case SerialisedNode.NodeType.Input:
-                    node = addInput((InputKey)sNode.index, sNode.postion, outfit);
+                    node = addInput((InputKey)sNode.index, sNode.position, outfit, sNode.name);
                     break;
                 case SerialisedNode.NodeType.Output:
-                    node = addOutput(sNode.data[0], outfit);
-                    node.SetInput(sNode.data[1], 0);
+                    node = addOutput(sNode.index - 1000000, outfit, sNode.name);
+                    if (sNode.data?.Count > 0) node.SetInput(sNode.data[0], 0);
                     break;
                 case SerialisedNode.NodeType.AdvancedInput:
                     node = deserialiseAdvancedInputNode(outfit, sNode, (AdvancedInputType)sNode.data2[0]);
+                    if (sNode.name != null) node.label = sNode.name;
                     break;
             }
             if (node != null)
             {
                 node.enabled = sNode.enabled;
-                node.setPosition(sNode.postion);
+                node.setPosition(sNode.position);
             }
         }
 
@@ -228,25 +245,25 @@ namespace AmazingNewAccessoryLogic
             switch (advancedInputType)
             {
                 case AdvancedInputType.HandPtn:
-                    node = addAdvancedInputHands((bool)sNode.data2[1], (bool)sNode.data2[2], (int)sNode.data2[3], sNode.postion, outfit, sNode.index);
+                    node = addAdvancedInputHands((bool)sNode.data2[1], (bool)sNode.data2[2], (int)sNode.data2[3], sNode.position, outfit, sNode.index);
                     break;
                 case AdvancedInputType.EyesOpn:
-                    node = addAdvancedInputEyeThreshold((bool)sNode.data2[1], (float)sNode.data2[2], sNode.postion, outfit, sNode.index);
+                    node = addAdvancedInputEyeThreshold((bool)sNode.data2[1], (float)sNode.data2[2], sNode.position, outfit, sNode.index);
                     break;
                 case AdvancedInputType.MouthOpn:
-                    node = addAdvancedInputMouthThreshold((bool)sNode.data2[1], (float)sNode.data2[2], sNode.postion, outfit, sNode.index);
+                    node = addAdvancedInputMouthThreshold((bool)sNode.data2[1], (float)sNode.data2[2], sNode.position, outfit, sNode.index);
                     break;
                 case AdvancedInputType.EyesPtn:
-                    node = addAdvancedInputEyePattern((int)sNode.data2[1], sNode.postion, outfit, sNode.index);
+                    node = addAdvancedInputEyePattern((int)sNode.data2[1], sNode.position, outfit, sNode.index);
                     break;
                 case AdvancedInputType.MouthPtn:
-                    node = addAdvancedInputMouthPattern((int)sNode.data2[1],sNode.postion, outfit, sNode.index);
+                    node = addAdvancedInputMouthPattern((int)sNode.data2[1],sNode.position, outfit, sNode.index);
                     break;
                 case AdvancedInputType.EyebrowPtn:
-                    node = addAdvancedInputEyebrowPattern((int)sNode.data2[1],sNode.postion, outfit,sNode.index);
+                    node = addAdvancedInputEyebrowPattern((int)sNode.data2[1],sNode.position, outfit,sNode.index);
                     break;
                 case AdvancedInputType.Accessory:
-                    node = addAdvancedInputAccessory((int)sNode.data2[1], sNode.postion, outfit, sNode.index);
+                    node = addAdvancedInputAccessory((int)sNode.data2[1], sNode.position, outfit, sNode.index);
                     break;
             }
             return node;
@@ -285,7 +302,7 @@ namespace AmazingNewAccessoryLogic
             return graphs[outfit.Value];
         }
 
-        internal LogicFlowInput addInput(InputKey key, Vector2 pos, int? outfit = null)
+        internal LogicFlowInput addInput(InputKey key, Vector2 pos, int? outfit = null, string name = null)
         {
             LogicFlowGraph g;
             if (!outfit.HasValue) g = lfg;
@@ -296,63 +313,63 @@ namespace AmazingNewAccessoryLogic
             switch ((int)key)
             {
                 case 1001:
-                    node = new LogicFlowInput_Func(() => getClothState(0, 0), g, (int)key) { label = "Top On"};
+                    node = new LogicFlowInput_Func(() => getClothState(0, 0), g, (int)key) { label = name ?? "Top On"};
                     break;
                 case 1002:
-                    node = new LogicFlowInput_Func(() => getClothState(0, 1), g, (int)key) { label = "Top ½"};
+                    node = new LogicFlowInput_Func(() => getClothState(0, 1), g, (int)key) { label = name ?? "Top ½" };
                     break;
                 case 1003:    
-                    node = new LogicFlowInput_Func(() => getClothState(1, 0), g, (int)key) { label = "Btm On"};
+                    node = new LogicFlowInput_Func(() => getClothState(1, 0), g, (int)key) { label = name ?? "Btm On" };
                     break;
                 case 1004:    
-                    node = new LogicFlowInput_Func(() => getClothState(1, 1), g, (int)key) { label = "Btm ½"};
+                    node = new LogicFlowInput_Func(() => getClothState(1, 1), g, (int)key) { label = name ?? "Btm ½" };
                     break;
                 case 1005:    
-                    node = new LogicFlowInput_Func(() => getClothState(2, 0), g, (int)key) { label = "Bra On"};
+                    node = new LogicFlowInput_Func(() => getClothState(2, 0), g, (int)key) { label = name ?? "Bra On" };
                     break;
                 case 1006:    
-                    node = new LogicFlowInput_Func(() => getClothState(2, 1), g, (int)key) { label = "Bra ½"};
+                    node = new LogicFlowInput_Func(() => getClothState(2, 1), g, (int)key) { label = name ?? "Bra ½" };
                     break;
                 case 1007:    
-                    node = new LogicFlowInput_Func(() => getClothState(3, 0), g, (int)key) { label = "UWear On"};
+                    node = new LogicFlowInput_Func(() => getClothState(3, 0), g, (int)key) { label = name ?? "UWear On" };
                     break;
                 case 1008:    
-                    node = new LogicFlowInput_Func(() => getClothState(3, 1), g, (int)key) { label = "UWear ½"};
+                    node = new LogicFlowInput_Func(() => getClothState(3, 1), g, (int)key) { label = name ?? "UWear ½" };
                     break;
                 case 1009:    
-                    node = new LogicFlowInput_Func(() => getClothState(3, 2), g, (int)key) { label = "UWear ¼"};
+                    node = new LogicFlowInput_Func(() => getClothState(3, 2), g, (int)key) { label = name ?? "UWear ¼" };
                     break;
                 case 1010:    
-                    node = new LogicFlowInput_Func(() => getClothState(4, 0), g, (int)key) { label = "Glove On"};
+                    node = new LogicFlowInput_Func(() => getClothState(4, 0), g, (int)key) { label = name ?? "Glove On" };
                     break;
                 case 1011:    
-                    node = new LogicFlowInput_Func(() => getClothState(4, 1), g, (int)key) { label = "Glove ½"};
+                    node = new LogicFlowInput_Func(() => getClothState(4, 1), g, (int)key) { label = name ?? "Glove ½" };
                     break;
                 case 1012:    
-                    node = new LogicFlowInput_Func(() => getClothState(4, 2), g, (int)key) { label = "Glove ¼"};
+                    node = new LogicFlowInput_Func(() => getClothState(4, 2), g, (int)key) { label = name ?? "Glove ¼" };
                     break;
                 case 1013:    
-                    node = new LogicFlowInput_Func(() => getClothState(5, 0), g, (int)key) { label = "PHose On"};
+                    node = new LogicFlowInput_Func(() => getClothState(5, 0), g, (int)key) { label = name ?? "PHose On" };
                     break;
                 case 1014:    
-                    node = new LogicFlowInput_Func(() => getClothState(5, 1), g, (int)key) { label = "PHose ½"};
+                    node = new LogicFlowInput_Func(() => getClothState(5, 1), g, (int)key) { label = name ?? "PHose ½" };
                     break;
                 case 1015:    
-                    node = new LogicFlowInput_Func(() => getClothState(5, 2), g, (int)key) { label = "PHose ¼"};
+                    node = new LogicFlowInput_Func(() => getClothState(5, 2), g, (int)key) { label = name ?? "PHose ¼" };
                     break;
                 case 1016:    
-                    node = new LogicFlowInput_Func(() => getClothState(6, 0), g, (int)key) { label = "LWear On"};
+                    node = new LogicFlowInput_Func(() => getClothState(6, 0), g, (int)key) { label = name ?? "LWear On" };
                     break;
 #if KKS
                 case 1018:
-                    node = new LogicFlowInput_Func(() => getClothState(7, 0), g, (int)key) { label = "Shoes On"};
+                    node = new LogicFlowInput_Func(() => getClothState(7, 0), g, (int)key) { label = name ?? "Shoes On" };
                     break;
 #else
                 case 1017:
-                    node = new LogicFlowInput_Func(() => getClothState(7, 0), g, key: 1017) {label = "Indoor On"};
+                    node = new LogicFlowInput_Func(() => getClothState(7, 0), g, key: 1017) {label = name ?? "Indoor On" };
                     break;
                 case 1018:
-                    node = new LogicFlowInput_Func(() => getClothState(8, 0), g, key: 1018) {label = "Outdoor On"};
+                    node = new LogicFlowInput_Func(() => getClothState(8, 0), g, key: 1018) {label = name ?? "Outdoor On" };
                     break;
 #endif          
                 default:
@@ -751,7 +768,7 @@ namespace AmazingNewAccessoryLogic
         /// </summary>
         /// <param name="slot">Accessory Slot</param>
         /// <param name="outfit">Outfit Slot</param>
-        public LogicFlowOutput addOutput(int slot, int? outfit = null)
+        public LogicFlowOutput addOutput(int slot, int? outfit = null, string name = null)
         {
             if (!outfit.HasValue) outfit = ChaControl.fileStatus.coordinateType;
 
@@ -759,7 +776,7 @@ namespace AmazingNewAccessoryLogic
             {
                 if (activeSlots.ContainsKey(outfit.Value) && activeSlots[outfit.Value].Contains(slot)) return null;
                 activeSlots[outfit.Value].Add(slot);
-                LogicFlowOutput output = new LogicFlowOutput_Action((value) => setAccessoryState(slot, value), graphs[outfit.Value], key: 1000000 + slot) { label = $"Slot {slot + 1}", toolTipText = null };
+                LogicFlowOutput output = new LogicFlowOutput_Action((value) => setAccessoryState(slot, value), graphs[outfit.Value], key: 1000000 + slot) { label = name ?? $"Slot {slot + 1}", toolTipText = null };
                 output.setPosition(new Vector2(
                     graphs[outfit.Value].getSize().x - 80,
                     graphs[outfit.Value].getSize().y - 50 * (activeSlots[outfit.Value].Count))
@@ -799,7 +816,7 @@ namespace AmazingNewAccessoryLogic
         /// </summary>
         /// <param name="outfit">Outfit Slot</param>
         /// <param name="type">0 = NOT, 1 = AND, 2 = OR, 3 = XOR, 4 = GRP</param>
-        public LogicFlowGate addGate(int outfit, byte type)
+        public LogicFlowGate addGate(int outfit, byte type, string name = null)
         {
             if (graphs.ContainsKey(outfit))
             {
@@ -807,19 +824,19 @@ namespace AmazingNewAccessoryLogic
                 switch (type)
                 {
                     default:
-                        gate = new LogicFlowNode_NOT(graphs[outfit]) { label = "NOT", toolTipText = "NOT" };
+                        gate = new LogicFlowNode_NOT(graphs[outfit]) { label = name ?? "NOT", toolTipText = "NOT" };
                         break;
                     case 1:
-                        gate = new LogicFlowNode_AND(graphs[outfit]) { label = "AND", toolTipText = "AND" };
+                        gate = new LogicFlowNode_AND(graphs[outfit]) { label = name ?? "AND", toolTipText = "AND" };
                         break;
                     case 2:
-                        gate = new LogicFlowNode_OR(graphs[outfit]) { label = "OR", toolTipText = "OR" };
+                        gate = new LogicFlowNode_OR(graphs[outfit]) { label = name ?? "OR", toolTipText = "OR" };
                         break;
                     case 3:
-                        gate = new LogicFlowNode_XOR(graphs[outfit]) { label = "XOR", toolTipText = "XOR" };
+                        gate = new LogicFlowNode_XOR(graphs[outfit]) { label = name ?? "XOR", toolTipText = "XOR" };
                         break;
                     case 4:
-                        gate = new LogicFlowNode_GRP(graphs[outfit]);
+                        gate = new LogicFlowNode_GRP(graphs[outfit], name: name);
                         break;
                 }
                 gate.setPosition(graphs[outfit].getSize()/2 - (gate.getSize() / 2));
@@ -898,14 +915,22 @@ namespace AmazingNewAccessoryLogic
             rCam.backgroundColor = Color.clear;
             rCam.cullingMask = 0;
 
-            oldClothStates = (byte[])ChaControl.fileStatus.clothesState.Clone();
-            
-
             base.Start();
         }
 
+        int oldCoord = 0;
         protected override void Update()
         {
+            if (ChaControl.fileStatus.coordinateType != oldCoord) {
+                AmazingNewAccessoryLogic.Logger.LogDebug("Coordinate changed, applying data...");
+                oldCoord = ChaControl.fileStatus.coordinateType;
+                StartCoroutine(UpdateLater());
+                IEnumerator UpdateLater() {
+                    for (int i = 0; i < 2; i++) yield return null;
+                    lfg?.ForceUpdate();
+                }
+            }
+
             if (lfg == null)
             {
                 if (MakerAPI.InsideAndLoaded) AmazingNewAccessoryLogic.SidebarToggle.Value = false;
@@ -931,12 +956,6 @@ namespace AmazingNewAccessoryLogic
                 }
             }
             else lfg.backgroundUpdate();
-
-            if(!Enumerable.SequenceEqual(oldClothStates, ChaControl.fileStatus.clothesState))
-            {
-                lfg.ForceUpdate();
-            }
-            oldClothStates = (byte[])ChaControl.fileStatus.clothesState.Clone();
 
             base.Update();
         }

@@ -18,7 +18,7 @@ namespace AmazingNewAccessoryLogic {
         }
 
         // dic<state, set<enabledThingForThisState>>
-        private Dictionary<int, HashSet<LogicFlowNode>> controlledNodes = new Dictionary<int, HashSet<LogicFlowNode>>();
+        internal Dictionary<int, HashSet<LogicFlowNode>> controlledNodes = new Dictionary<int, HashSet<LogicFlowNode>>();
 
         public LogicFlowNode_GRP(LogicFlowGraph parentGraph, int? key = null, string name = null) : base(new int?[1], parentGraph, key) {
             setName(name ?? "GRP");
