@@ -9,6 +9,7 @@ using KKAPI.Maker;
 using System.Collections;
 using ExtensibleSaveFormat;
 using System.Collections.Generic;
+using static GameCursor;
 
 namespace AmazingNewAccessoryLogic
 {
@@ -19,6 +20,7 @@ namespace AmazingNewAccessoryLogic
         public const int renameWindowID = 2233522;
         public const int groupSelectWindowID = 2233533;
         public const int simpleModeWindowID = 2233544;
+        public const int simpleModeAccBindDropID = 2233555;
 
         public LogicFlowGraph lfg { get => getCurrentGraph(); private set => setCurrentGraph(value); }
 
@@ -1043,19 +1045,44 @@ namespace AmazingNewAccessoryLogic
         private Rect groupScrollRect = new Rect();
         private Vector2 groupScrollPos = Vector2.zero;
 
-        private const float simpleMinWidth = 600f;
+        private const float simpleMinWidth = 640f;
         private const float simpleMinHeight = 400f;
         private Rect simpleWindowRect = new Rect(150, 150, simpleMinWidth, simpleMinHeight);
         private Vector2 simpleWindowScrollPosAcs = Vector2.zero;
         private Vector2 simpleWindowScrollPosGrp = Vector2.zero;
 
+        private int simpleAccBeingBound = -1;
+        private Rect simpleAccBindRect = new Rect();
+        private Vector2 simpleAccBindScrollPos = Vector2.zero;
+        private static GUIStyle bindStateStyleOff = null;
+        private static GUIStyle bindStateStyleOn = null;
+
         void OnGUI()
         {
             if (lfg == null) return;
+
+            if (bindStateStyleOff == null || bindStateStyleOn == null) {
+                var offCol = new Color(221 / 255f, 60 / 255f, 60 / 255f);
+                bindStateStyleOff = new GUIStyle(GUI.skin.button);
+                bindStateStyleOff.normal.textColor = offCol;
+                bindStateStyleOff.hover.textColor = offCol;
+                bindStateStyleOff.active.textColor = offCol;
+                bindStateStyleOff.focused.textColor = offCol;
+                var onCol = new Color(34 / 255f, 195 / 255f, 34 / 255f);
+                bindStateStyleOn = new GUIStyle(GUI.skin.button);
+                bindStateStyleOn.normal.textColor = onCol;
+                bindStateStyleOn.hover.textColor = onCol;
+                bindStateStyleOn.active.textColor = onCol;
+                bindStateStyleOn.focused.textColor = onCol;
+            }
+
             if (displayGraph && !graphData[lfg].advanced)
             {
+                // Main simple window
                 var solidSkin = KKAPI.Utilities.IMGUIUtils.SolidBackgroundGuiSkin;
-                simpleWindowRect = GUILayout.Window(simpleModeWindowID, simpleWindowRect, (x) => {
+                simpleWindowRect = GUILayout.Window(simpleModeWindowID, simpleWindowRect, (windowId) => {
+                    var data = graphData[lfg];
+
                     // Negative spacing to get the title row to be on the title
                     GUILayout.Space(-22);
 
@@ -1065,7 +1092,7 @@ namespace AmazingNewAccessoryLogic
                         GUILayout.FlexibleSpace();
                         if (GUILayout.Button("Adv. Mode")) graphData[lfg].advanced = true;
                         if (GUILayout.Button("X")) Hide();
-                        GUILayout.Space(-5);
+                        GUILayout.Space(-6);
                     }
                     GUILayout.EndHorizontal();
 
@@ -1088,9 +1115,117 @@ namespace AmazingNewAccessoryLogic
                         var acsRect = new Rect(new Vector2(10f, 40f), size);
                         GUI.Box(acsRect, "");
                         GUILayout.BeginArea(acsRect, "");
-                        GUILayout.BeginScrollView(simpleWindowScrollPosAcs, false, true);
+                        simpleWindowScrollPosAcs = GUILayout.BeginScrollView(simpleWindowScrollPosAcs, false, true);
                         {
-                            GUILayout.Label("Acs");
+                            if (!ChaControl.infoAccessory.Any(x => x!= null)) {
+                                GUILayout.Label("No accessories!");
+                            } else {
+                                int numBtns = 0;
+                                for (int i = 0; i < ChaControl.infoAccessory.Length; i++) {
+                                    if (ChaControl.infoAccessory[i] == null) continue;
+                                    numBtns++;
+                                    var accBoxSize = new Vector2(acsRect.size.x - 18f, 70);
+                                    GUILayout.Space(2);
+                                    GUILayout.Box("", solidSkin.window, new[] { GUILayout.Width(accBoxSize.x), GUILayout.Height(accBoxSize.y) });
+                                    GUILayout.Space(-(accBoxSize.y + 3));
+                                    GUILayout.BeginVertical();
+                                    {
+                                        GUILayout.BeginHorizontal();
+                                        {
+                                            GUILayout.Space(5);
+                                            GUILayout.Label(ChaControl.infoAccessory[i].Name);
+                                            GUILayout.FlexibleSpace();
+                                            GUILayout.Label($"Slot {i + 1}");
+                                            GUILayout.Space(3);
+                                        }
+                                        GUILayout.EndHorizontal();
+                                        GUILayout.BeginHorizontal();
+                                        {
+                                            GUILayout.Space(5);
+                                            GUILayout.BeginVertical();
+                                            {
+                                                GUILayout.Space(-6);
+                                                GUILayout.Label("Bound to:");
+                                                GUILayout.Space(-2);
+                                                string boundBtnLabel = data.bindings.TryGetValue(i, out var boundVal) && boundVal != null ? data.bindings[i].ToString() : "None";
+                                                if (GUILayout.Button(boundBtnLabel)) {
+                                                    simpleAccBeingBound = i;
+                                                    simpleAccBindRect = new Rect(
+                                                        simpleWindowRect.x + 15f,
+                                                        simpleWindowRect.y + numBtns * (accBoxSize.y + 2f) + 35f - simpleWindowScrollPosAcs.y,
+                                                        120f,
+                                                        160f
+                                                    );
+                                                }
+                                            }
+                                            GUILayout.EndVertical();
+                                            if (data.bindings.TryGetValue(i, out var boundTo) && boundTo != null) {
+                                                GUILayout.BeginVertical();
+                                                {
+                                                    GUILayout.Space(-6);
+                                                    GUILayout.Label("ON States:");
+                                                    GUILayout.Space(-2);
+                                                    GUILayout.BeginHorizontal();
+                                                    var bindStates = GraphData.bindingStates[boundTo.Value];
+                                                    if (boundTo != BindingType.Shoes) {
+                                                        if (GUILayout.Button("On", isBound(0) ? bindStateStyleOn : bindStateStyleOff)) {
+                                                            toggleBoundState(0);
+                                                        }
+                                                        if (bindStates.Count > 1 && GUILayout.Button("Half", isBound(1) ? bindStateStyleOn : bindStateStyleOff)) {
+                                                            toggleBoundState(1);
+                                                        }
+                                                        if (bindStates.Count > 2 && GUILayout.Button("Hang", isBound(2) ? bindStateStyleOn : bindStateStyleOff)) {
+                                                            toggleBoundState(2);
+                                                        }
+                                                        if (GUILayout.Button("Off", isBound(3) ? bindStateStyleOn : bindStateStyleOff)) {
+                                                            toggleBoundState(3);
+                                                        }
+                                                    } else {
+#if KKS
+                                                        if (GUILayout.Button("On", isBound(0) ? bindStateStyleOn : bindStateStyleOff)) {
+                                                            toggleBoundState(0);
+                                                        }
+#else
+                                                        if (GUILayout.Button("Indoors", isBound(0) ? bindStateStyleOn : bindStateStyleOff)) {
+                                                            toggleBoundState(0);
+                                                        }
+                                                        if (GUILayout.Button("Outdoors", isBound(1) ? bindStateStyleOn : bindStateStyleOff)) {
+                                                            toggleBoundState(1);
+                                                        }
+#endif
+                                                        if (GUILayout.Button("Off", isBound(3) ? bindStateStyleOn : bindStateStyleOff)) {
+                                                            toggleBoundState(3);
+                                                        }
+                                                    }
+                                                    GUILayout.EndHorizontal();
+
+                                                    bool isBound(int shift) {
+                                                        return data.activeBoundStates.TryGetValue(i, out var bytes) && (bytes & (1 << shift)) > 0;
+                                                    }
+                                                    void toggleBoundState(int shift) {
+                                                        if (!data.activeBoundStates.ContainsKey(i)) {
+                                                            data.activeBoundStates[i] = 0;
+                                                        }
+                                                        if (isBound(shift)) {
+                                                            data.activeBoundStates[i] &= (byte)~(1 << shift);
+                                                        } else {
+                                                            data.activeBoundStates[i] |= (byte)(1 << shift);
+                                                        }
+                                                    }
+                                                }
+                                                GUILayout.EndVertical();
+                                            } else {
+                                                GUILayout.FlexibleSpace();
+                                            }
+                                            GUILayout.Space(3);
+                                        }
+                                        GUILayout.EndHorizontal();
+                                    }
+                                    GUILayout.EndVertical();
+                                    GUILayout.Space(2);
+                                }
+                                GUILayout.Space(5);
+                            }
                         }
                         GUILayout.EndScrollView();
                         GUILayout.EndArea();
@@ -1099,7 +1234,7 @@ namespace AmazingNewAccessoryLogic
                         var grpRect = new Rect(new Vector2(wS.x / 2f + 2.5f, 40f), size);
                         GUI.Box(grpRect, "");
                         GUILayout.BeginArea(grpRect, "");
-                        GUILayout.BeginScrollView(simpleWindowScrollPosGrp, false, true);
+                        simpleWindowScrollPosGrp = GUILayout.BeginScrollView(simpleWindowScrollPosGrp, false, true);
                         {
                             GUILayout.Label("Grp");
                         }
@@ -1115,8 +1250,47 @@ namespace AmazingNewAccessoryLogic
                     Mathf.Clamp(sWP.x, -sWS.x * 0.9f, Screen.width - sWS.x * 0.1f),
                     Mathf.Clamp(sWP.y, -sWS.y * 0.9f, Screen.height - sWS.y * 0.1f)
                 );
-            }
-            else if (displayGraph && graphData[lfg].advanced)
+                simpleWindowRect.size = new Vector2(
+                    Mathf.Max(simpleMinWidth, simpleWindowRect.width),
+                    Mathf.Max(simpleMinHeight, simpleWindowRect.height)
+                );
+
+                #region Temporary elements
+                Vector2 expansion = new Vector2(10, 10);
+                // Binding selector
+                var inRect = new Rect(simpleAccBindRect.position - expansion - new Vector2(0, 20), simpleAccBindRect.size + 2 * expansion + new Vector2(0, 20));
+                if (simpleAccBeingBound > -1 && !inRect.Contains(Event.current.mousePosition)) {
+                    simpleAccBeingBound = -1;
+                }
+                if (simpleAccBeingBound > -1) {
+                    GUILayout.Window(simpleModeAccBindDropID, simpleAccBindRect, (windowId) => {
+                        // More opaque background
+                        var boxRect = new Rect(Vector2.zero, simpleAccBindRect.size);
+                        GUI.Box(boxRect, "");
+                        GUI.Box(boxRect, "");
+
+                        simpleAccBindScrollPos = GUILayout.BeginScrollView(simpleAccBindScrollPos);
+                        {
+                            if (GUILayout.Button("None")) {
+                                graphData[lfg].bindings[simpleAccBeingBound] = null;
+                                graphData[lfg].activeBoundStates.Remove(simpleAccBeingBound);
+                                simpleAccBeingBound = -1;
+                            }
+                            foreach (var opt in Enum.GetValues(typeof(BindingType))) {
+                                if (GUILayout.Button(Enum.GetName(typeof(BindingType), opt))) {
+                                    graphData[lfg].bindings[simpleAccBeingBound] = (BindingType)opt;
+                                    graphData[lfg].activeBoundStates[simpleAccBeingBound] = 0;
+                                    simpleAccBeingBound = -1;
+                                }
+                            }
+                        }
+                        GUILayout.EndScrollView();
+                    }, "", solidSkin.box);
+                    GUI.BringWindowToFront(simpleModeAccBindDropID);
+                    KKAPI.Utilities.IMGUIUtils.EatInputInRect(simpleAccBindRect);
+                }
+                #endregion
+            } else if (displayGraph && graphData[lfg].advanced)
             {
                 var solidSkin = KKAPI.Utilities.IMGUIUtils.SolidBackgroundGuiSkin;
                 Rect guiRect = new Rect(screenToGUI(lfg.positionUI), new Vector2(lfg.sizeUI.x, -lfg.sizeUI.y));
@@ -1145,7 +1319,7 @@ namespace AmazingNewAccessoryLogic
                 if (GUI.Button(closeRect, "Close")) { Hide(); }
 
                 normalInputRect.position = screenToGUI(lfg.positionUI + lfg.sizeUI + new Vector2(5, 0));
-                normalInputRect = GUILayout.Window(normalInputWindowID, normalInputRect, (x) => {
+                normalInputRect = GUILayout.Window(normalInputWindowID, normalInputRect, (windowId) => {
                     GUILayout.BeginVertical();
 
                     // add nodes buttons
@@ -1313,7 +1487,7 @@ namespace AmazingNewAccessoryLogic
                 #endregion
             }
         }
-        #endregion
+#endregion
 
         #region Advanced Input GUI
         private bool showAdvancedInputWindow = false;
@@ -1535,7 +1709,7 @@ namespace AmazingNewAccessoryLogic
                     return null;
             }
         }
-        #endregion
+#endregion
         #region ASS Data tranlation
         /// <summary>
         /// check is this trigger is valid (either existing state or off)
