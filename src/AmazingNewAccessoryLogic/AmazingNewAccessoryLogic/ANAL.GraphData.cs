@@ -134,7 +134,7 @@ namespace AmazingNewAccessoryLogic {
                 }
                 if (kvp.Value.Count > 0) {
                     pos /= kvp.Value.Count;
-                    grp.setPosition(pos - new Vector2(grp.rect.width + 30, 0));
+                    grp.setPosition(pos - new Vector2(grp.getSize().x + 30, 0));
                 } else {
                     grp.setPosition(graph.getSize() / 2 - (grp.getSize() / 2));
                 }
@@ -171,72 +171,95 @@ namespace AmazingNewAccessoryLogic {
                         }
                     }
                 }
-                var zInputs = bindingStates[kvp.Value.Value];
-                if (activeBindings.Count == 0 || activeBindings.Count == zInputs.Count + 1) continue;
 
-                // Add connections
-                if (activeBindings.Count == 1) {
+                // Connect inputs to node
+                float perGateOffset = 20f;
+                if (activeBindings.Count == 0) {
+                    // No bound states, node should always be inactive
+                    var not = ctrl.addNotForInput((int)bindKeys[0], outfit);
+                    var and = ctrl.addAndGateForInputs((int)bindKeys[0], not.index, outfit);
+                    and.setPosition(boundNode.getPosition() - new Vector2(and.getSize().x + perGateOffset, 0));
+                    not.setPosition(and.getPosition() - new Vector2(not.getSize().x + perGateOffset, 0));
+                    boundNode.SetInput(and.index, 0);
+                } else if (activeBindings.Count == 1) {
+                    // Only one state is bound
                     if (activeBindings[0] == 0) {
-                        var not = makeNone();
-                        if (not == null) continue;
+                        // But that state is the Off state, so we have to invert all the rest
+                        var none = makeNone(out var noneNodes);
+                        noneNodes.Reverse();
+                        LogicFlowNode previous = boundNode;
+                        foreach (var node in noneNodes) {
+                            node.setPosition(previous.getPosition() - new Vector2(node.getSize().x + perGateOffset, 0));
+                            previous = node;
+                        }
+                        boundNode.SetInput(none.index, 0);
+                    } else {
+                        // We can bind the single, non-off state directly to the node
+                        boundNode.SetInput(activeBindings[0], 0);
+                    }
+                } else if (activeBindings.Count == bindKeys.Count + 1) {
+                    // All possible states are bound, node should always be active -> no binding needed
+                    continue;
+                } else if (activeBindings.Count == bindKeys.Count) {
+                    // All but one state is bound
+                    if (activeBindings.Contains(0)) {
+                        // The off input is bound, so we can invert the single remaining input
+                        int inverse = (int)bindKeys.Where(x => !activeBindings.Contains((int)x)).First();
+                        var not = ctrl.addNotForInput(inverse, outfit);
+                        not.setPosition(boundNode.getPosition() - new Vector2(not.getSize().x + perGateOffset, 0));
+                    } else {
+                        // The off input isn't bound so we have to OR together either two or three inputs
+                        // Because the one input scenario was handled earlier
+                        var or1 = ctrl.addOrGateForInputs(activeBindings[1], activeBindings[0], outfit);
+                        if (activeBindings.Count > 2) {
+                            var or2 = ctrl.addOrGateForInputs(or1.index, activeBindings[2], outfit);
+                            or2.setPosition(boundNode.getPosition() - new Vector2(or2.getSize().x + perGateOffset, 0));
+                            or1.setPosition(or2.getPosition() - new Vector2(or1.getSize().x + perGateOffset, 0));
+                            boundNode.SetInput(or2.index, 0);
+                        } else {
+                            or1.setPosition(boundNode.getPosition() - new Vector2(or1.getSize().x + perGateOffset, 0));
+                            boundNode.SetInput(or1.index, 0);
+                        }
+                    }
+                } else {
+                    // The only remaining scenario is where two out of four possible states are bound
+                    if (activeBindings.Contains(0)) {
+                        // The off state is bound, so we invert the OR of the other two
+                        List<InputKey> inverse = bindKeys.Where(x => !activeBindings.Contains((int)x)).ToList();
+                        var or = ctrl.addOrGateForInputs((int)inverse[0], (int)inverse[1], outfit);
+                        var not = ctrl.addNotForInput(or.index, outfit);
+                        not.setPosition(boundNode.getPosition() - new Vector2(not.getSize().x + perGateOffset, 0));
+                        or.setPosition(not.getPosition() - new Vector2(or.getSize().x + perGateOffset, 0));
                         boundNode.SetInput(not.index, 0);
                     } else {
-                        var node = graph.getNodeAt(activeBindings[0]);
-                        if (node == null) continue;
-                        boundNode.SetInput(node.index, 0);
-                    }
-                } else if (activeBindings.Count == 2) {
-                    if (activeBindings.Contains(0)) {
-                        int other = activeBindings.Max();
-                        if (zInputs.Count == 2) {
-                            int inverse = (int)((int)zInputs[0] == other ? zInputs[1] : zInputs[0]);
-                            var not = ctrl.addNotForInput(inverse, outfit);
-                            not.setPosition(boundNode.getPosition() - new Vector2(not.getSize().x + 10f, 0));
-                            boundNode.SetInput(not.index, 0);
-                        } else {
-                            var none = makeNone(70f);
-                            if (none == null) continue;
-                            var or = ctrl.addOrGateForInputs(none.index, other, outfit);
-                            or.setPosition(boundNode.getPosition() - new Vector2(or.getSize().x + 10f, 0));
-                            boundNode.SetInput(or.index, 0);
-                        }
-                    } else {
+                        // The off state isn't bound, so we can simply or together the two bound states
                         var or = ctrl.addOrGateForInputs(activeBindings[0], activeBindings[1], outfit);
-                        or.setPosition(boundNode.getPosition() - new Vector2(or.getSize().x + 10f, 0));
+                        or.setPosition(boundNode.getPosition() - new Vector2(or.getSize().x + perGateOffset, 0));
                         boundNode.SetInput(or.index, 0);
                     }
-                } else if (activeBindings.Count == 3) {
-                    var or1 = ctrl.addOrGateForInputs(activeBindings[1], activeBindings[0], outfit);
-                    var or2 = ctrl.addOrGateForInputs(or1.index, activeBindings[2], outfit);
-                    or2.setPosition(boundNode.getPosition() - new Vector2(or2.getSize().x + 10f, 0));
-                    or1.setPosition(or2.getPosition() - new Vector2(or1.getSize().x + 10f, 0));
-                    boundNode.SetInput(or2.index, 0);
-                } else {
-                    continue;
                 }
 
-                LogicFlowNode_NOT makeNone(float offset = 0f) {
-                    switch (zInputs.Count) {
-                        case 1:
-                            var not1 = ctrl.addNotForInput((int)zInputs[0], outfit);
-                            not1.setPosition(boundNode.getPosition() - new Vector2(not1.getSize().x + 10f + offset, 0));
-                            return not1;
-                        case 2:
-                            var or = ctrl.addOrGateForInputs((int)zInputs[1], (int)zInputs[0], outfit);
-                            var not2 = ctrl.addNotForInput(or.index, outfit);
-                            not2.setPosition(boundNode.getPosition() - new Vector2(not2.getSize().x + 10f + offset, 0));
-                            or.setPosition(not2.getPosition() - new Vector2(or.getSize().x + 10f, 0));
-                            return not2;
-                        case 3:
-                            var or1 = ctrl.addOrGateForInputs((int)zInputs[1], (int)zInputs[0], outfit);
-                            var or2 = ctrl.addOrGateForInputs(or1.index, (int)zInputs[2], outfit);
-                            var not3 = ctrl.addNotForInput(or2.index, outfit);
-                            not3.setPosition(boundNode.getPosition() - new Vector2(not3.getSize().x + 10f + offset, 0));
-                            or2.setPosition(not3.getPosition() - new Vector2(or2.getSize().x + 10f, 0));
-                            or1.setPosition(or2.getPosition() - new Vector2(or1.getSize().x + 10f, 0));
-                            return not3;
-                        default:
-                            return null;
+                LogicFlowNode_NOT makeNone(out List<LogicFlowGate> seqNodes) {
+                    seqNodes = new List<LogicFlowGate>();
+                    List<int> keys = bindKeys.Select(x => (int)x).ToList();
+                    if (keys.Count == 1) {
+                        var not = ctrl.addNotForInput(keys[0], outfit);
+                        seqNodes.Add(not);
+                        return not;
+                    } else if (keys.Count == 2) {
+                        var or = ctrl.addOrGateForInputs(keys[1], keys[0], outfit);
+                        seqNodes.Add(or);
+                        var not = ctrl.addNotForInput(or.index, outfit);
+                        seqNodes.Add(not);
+                        return not;
+                    } else {
+                        var or1 = ctrl.addOrGateForInputs(keys[1], keys[0], outfit);
+                        seqNodes.Add(or1);
+                        var or2 = ctrl.addOrGateForInputs(or1.index, keys[2], outfit);
+                        seqNodes.Add(or2);
+                        var not = ctrl.addNotForInput(or2.index, outfit);
+                        seqNodes.Add(not);
+                        return not;
                     }
                 }
             }
