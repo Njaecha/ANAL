@@ -21,13 +21,15 @@ namespace AmazingNewAccessoryLogic
         public const int groupSelectWindowID = 2233533;
         public const int simpleModeWindowID = 2233544;
         public const int simpleModeAccBindDropID = 2233555;
+        public const int simpleModeGroupAddID = 2233566;
 
         public LogicFlowGraph lfg { get => getCurrentGraph(); private set => setCurrentGraph(value); }
 
         internal static Dictionary<LogicFlowGraph, Dictionary<int, List<object>>> serialisationData = new Dictionary<LogicFlowGraph, Dictionary<int, List<object>>>();
 
+        internal static Dictionary<LogicFlowGraph, AnalCharaController> dicGraphToControl = new Dictionary<LogicFlowGraph, AnalCharaController>();
         private Dictionary<LogicFlowGraph, GraphData> graphData = new Dictionary<LogicFlowGraph, GraphData>();
-        private Dictionary<int, LogicFlowGraph> graphs = new Dictionary<int, LogicFlowGraph>();
+        internal Dictionary<int, LogicFlowGraph> graphs = new Dictionary<int, LogicFlowGraph>();
         private Dictionary<int, List<int>> activeSlots = new Dictionary<int, List<int>>();
 
         internal bool displayGraph = false;
@@ -191,6 +193,7 @@ namespace AmazingNewAccessoryLogic
             foreach (SerialisedNode sNode in sGraph.nodes.Where(x => x.type == SerialisedNode.NodeType.Gate_GRP)) deserialiseNode(outfit, sNode);
             graphData.Add(graphs[outfit], new GraphData(newGraph, sGraph.advanced));
             newGraph.isLoading = false;
+            dicGraphToControl.Add(newGraph, this);
         }
 
         SerialisedNode lastSnode = null;
@@ -291,8 +294,13 @@ namespace AmazingNewAccessoryLogic
         private void setCurrentGraph(LogicFlowGraph g)
         {
             int coord = ChaControl.fileStatus.coordinateType;
-            if (graphs.ContainsKey(coord)) graphs[coord] = g;
-            else graphs.Add(coord, g);
+            if (graphs.ContainsKey(coord)) {
+                graphs[coord] = g;
+                dicGraphToControl[g] = this;
+            } else {
+                graphs.Add(coord, g);
+                dicGraphToControl.Add(g, this);
+            }
             if (activeSlots.ContainsKey(coord)) activeSlots[coord].Clear();
             else activeSlots.Add(coord, new List<int>());
         }
@@ -305,6 +313,7 @@ namespace AmazingNewAccessoryLogic
             graphs[outfit.Value] = new LogicFlowGraph(new Rect(new Vector2(100,10), new Vector2(500, 900)));
             graphData[graphs[outfit.Value]] = new GraphData(graphs[outfit.Value], false);
             if (activeSlots == null) activeSlots = new Dictionary<int, List<int>>();
+            dicGraphToControl.Add(graphs[outfit.Value], this);
             activeSlots[outfit.Value] = new List<int>();
             float topY = 900;
 
@@ -1045,17 +1054,21 @@ namespace AmazingNewAccessoryLogic
         private Rect groupScrollRect = new Rect();
         private Vector2 groupScrollPos = Vector2.zero;
 
-        private const float simpleMinWidth = 640f;
-        private const float simpleMinHeight = 400f;
+        private const float simpleMinWidth = 720f;
+        private const float simpleMinHeight = 480f;
         private Rect simpleWindowRect = new Rect(150, 150, simpleMinWidth, simpleMinHeight);
         private Vector2 simpleWindowScrollPosAcs = Vector2.zero;
         private Vector2 simpleWindowScrollPosGrp = Vector2.zero;
 
-        private int simpleAccBeingBound = -1;
+        private int? simpleAccBeingBound = null;
         private Rect simpleAccBindRect = new Rect();
         private Vector2 simpleAccBindScrollPos = Vector2.zero;
         private static GUIStyle bindStateStyleOff = null;
         private static GUIStyle bindStateStyleOn = null;
+
+        private int? grpBeingAddedTo = null;
+        private Rect grpAddRect = new Rect();
+        private Vector2 grpAddScrollPos = Vector2.zero;
 
         void OnGUI()
         {
@@ -1076,8 +1089,7 @@ namespace AmazingNewAccessoryLogic
                 bindStateStyleOn.focused.textColor = onCol;
             }
 
-            if (displayGraph && !graphData[lfg].advanced)
-            {
+            if (displayGraph && !graphData[lfg].advanced) {
                 // Main simple window
                 var solidSkin = KKAPI.Utilities.IMGUIUtils.SolidBackgroundGuiSkin;
                 simpleWindowRect = GUILayout.Window(simpleModeWindowID, simpleWindowRect, (windowId) => {
@@ -1117,12 +1129,14 @@ namespace AmazingNewAccessoryLogic
                         GUILayout.BeginArea(acsRect, "");
                         simpleWindowScrollPosAcs = GUILayout.BeginScrollView(simpleWindowScrollPosAcs, false, true);
                         {
-                            if (!ChaControl.infoAccessory.Any(x => x!= null)) {
+                            if (!ChaControl.infoAccessory.Any(x => x != null)) {
                                 GUILayout.Label("No accessories!");
                             } else {
                                 int numBtns = 0;
+                                var acsInGroups = data.GetAllChildIndices();
                                 for (int i = 0; i < ChaControl.infoAccessory.Length; i++) {
                                     if (ChaControl.infoAccessory[i] == null) continue;
+                                    if (acsInGroups.Contains(i)) continue;
                                     numBtns++;
                                     var accBoxSize = new Vector2(acsRect.size.x - 18f, 70);
                                     GUILayout.Space(2);
@@ -1139,87 +1153,11 @@ namespace AmazingNewAccessoryLogic
                                             GUILayout.Space(3);
                                         }
                                         GUILayout.EndHorizontal();
-                                        GUILayout.BeginHorizontal();
-                                        {
-                                            GUILayout.Space(5);
-                                            GUILayout.BeginVertical();
-                                            {
-                                                GUILayout.Space(-6);
-                                                GUILayout.Label("Bound to:");
-                                                GUILayout.Space(-2);
-                                                string boundBtnLabel = data.bindings.TryGetValue(i, out var boundVal) && boundVal != null ? data.bindings[i].ToString() : "None";
-                                                if (GUILayout.Button(boundBtnLabel)) {
-                                                    simpleAccBeingBound = i;
-                                                    simpleAccBindRect = new Rect(
-                                                        simpleWindowRect.x + 15f,
-                                                        simpleWindowRect.y + numBtns * (accBoxSize.y + 2f) + 35f - simpleWindowScrollPosAcs.y,
-                                                        120f,
-                                                        160f
-                                                    );
-                                                }
-                                            }
-                                            GUILayout.EndVertical();
-                                            if (data.bindings.TryGetValue(i, out var boundTo) && boundTo != null) {
-                                                GUILayout.BeginVertical();
-                                                {
-                                                    GUILayout.Space(-6);
-                                                    GUILayout.Label("ON States:");
-                                                    GUILayout.Space(-2);
-                                                    GUILayout.BeginHorizontal();
-                                                    var bindStates = GraphData.bindingStates[boundTo.Value];
-                                                    if (boundTo != BindingType.Shoes) {
-                                                        if (GUILayout.Button("On", isBound(0) ? bindStateStyleOn : bindStateStyleOff)) {
-                                                            toggleBoundState(0);
-                                                        }
-                                                        if (bindStates.Count > 1 && GUILayout.Button("Half", isBound(1) ? bindStateStyleOn : bindStateStyleOff)) {
-                                                            toggleBoundState(1);
-                                                        }
-                                                        if (bindStates.Count > 2 && GUILayout.Button("Hang", isBound(2) ? bindStateStyleOn : bindStateStyleOff)) {
-                                                            toggleBoundState(2);
-                                                        }
-                                                        if (GUILayout.Button("Off", isBound(3) ? bindStateStyleOn : bindStateStyleOff)) {
-                                                            toggleBoundState(3);
-                                                        }
-                                                    } else {
-#if KKS
-                                                        if (GUILayout.Button("On", isBound(0) ? bindStateStyleOn : bindStateStyleOff)) {
-                                                            toggleBoundState(0);
-                                                        }
-#else
-                                                        if (GUILayout.Button("Indoors", isBound(0) ? bindStateStyleOn : bindStateStyleOff)) {
-                                                            toggleBoundState(0);
-                                                        }
-                                                        if (GUILayout.Button("Outdoors", isBound(1) ? bindStateStyleOn : bindStateStyleOff)) {
-                                                            toggleBoundState(1);
-                                                        }
-#endif
-                                                        if (GUILayout.Button("Off", isBound(3) ? bindStateStyleOn : bindStateStyleOff)) {
-                                                            toggleBoundState(3);
-                                                        }
-                                                    }
-                                                    GUILayout.EndHorizontal();
-
-                                                    bool isBound(int shift) {
-                                                        return data.activeBoundStates.TryGetValue(i, out var bytes) && (bytes & (1 << shift)) > 0;
-                                                    }
-                                                    void toggleBoundState(int shift) {
-                                                        if (!data.activeBoundStates.ContainsKey(i)) {
-                                                            data.activeBoundStates[i] = 0;
-                                                        }
-                                                        if (isBound(shift)) {
-                                                            data.activeBoundStates[i] &= (byte)~(1 << shift);
-                                                        } else {
-                                                            data.activeBoundStates[i] |= (byte)(1 << shift);
-                                                        }
-                                                    }
-                                                }
-                                                GUILayout.EndVertical();
-                                            } else {
-                                                GUILayout.FlexibleSpace();
-                                            }
-                                            GUILayout.Space(3);
-                                        }
-                                        GUILayout.EndHorizontal();
+                                        var offset = new Vector2(
+                                            15f,
+                                            numBtns * (accBoxSize.y + 2f) + 35f - simpleWindowScrollPosAcs.y
+                                        );
+                                        DoBindings(i, offset);
                                     }
                                     GUILayout.EndVertical();
                                     GUILayout.Space(2);
@@ -1231,15 +1169,233 @@ namespace AmazingNewAccessoryLogic
                         GUILayout.EndArea();
 
                         // Group list
+                        var grpNodes = lfg.nodes.Values.Where(x => x is LogicFlowNode_GRP).Select(x => x as LogicFlowNode_GRP).ToList();
+                        grpNodes.Sort((x, y) => x.label.CompareTo(y.label));
                         var grpRect = new Rect(new Vector2(wS.x / 2f + 2.5f, 40f), size);
                         GUI.Box(grpRect, "");
                         GUILayout.BeginArea(grpRect, "");
                         simpleWindowScrollPosGrp = GUILayout.BeginScrollView(simpleWindowScrollPosGrp, false, true);
                         {
-                            GUILayout.Label("Grp");
+                            GUILayout.BeginHorizontal();
+                            {
+                                GUILayout.FlexibleSpace();
+                                if (GUILayout.Button("Add Group")) {
+                                    addGate(4);
+                                }
+                                GUILayout.Space(-3);
+                            }
+                            GUILayout.EndHorizontal();
+                            int sumChildren = 0;
+                            float baseHeight = 60f;
+                            float childHeight = 25f;
+                            float baseBoxHeight = 117f;
+                            for (int i = 0; i < grpNodes.Count; i++) {
+                                LogicFlowNode_GRP node = grpNodes[i];
+                                List<int> grpChildren = null;
+                                bool hasChildren = data.TryGetChildren(node.index, out grpChildren) && grpChildren.Count > 0;
+                                int numChildren = grpChildren != null ? grpChildren.Count + 1 : 1;
+                                sumChildren += numChildren;
+                                var grpBoxSize = new Vector2(grpRect.size.x - 18f, baseBoxHeight + numChildren * childHeight - 4f);
+                                GUILayout.Box("", solidSkin.window, new[] { GUILayout.Width(grpBoxSize.x), GUILayout.Height(grpBoxSize.y) });
+                                GUILayout.Space(-(grpBoxSize.y + 4));
+                                GUILayout.BeginVertical();
+                                {
+                                    GUILayout.BeginHorizontal();
+                                    { // Group title
+                                        GUILayout.Space(5);
+                                        GUILayout.Label(node.getName());
+                                        GUILayout.FlexibleSpace();
+                                        if (GUILayout.Button("Rename")) {
+                                            renamedNode = node.index;
+                                            renameRect = new Rect(Event.current.mousePosition - new Vector2(120, 20) + grpRect.position + simpleWindowRect.position, new Vector2(240, 40));
+                                            renameName = node.getName();
+                                        }
+                                        if (GUILayout.Button("X")) {
+                                            lfg.RemoveNode(node.index);
+                                        }
+                                        GUILayout.Space(-2);
+                                    }
+                                    GUILayout.EndHorizontal();
+                                    { // Bindings
+                                        var offset = new Vector2(
+                                            simpleWindowRect.width / 2f + 8f,
+                                            (i + 1) * baseBoxHeight + (sumChildren - numChildren) * (childHeight) + baseHeight - simpleWindowScrollPosGrp.y - 45f
+                                        );
+                                        DoBindings(node.index, offset);
+                                    }
+                                    GUILayout.Space(3);
+                                    GUILayout.BeginHorizontal();
+                                    { // State selection
+                                        GUILayout.Space(5);
+                                        GUILayout.BeginVertical();
+                                        {
+                                            GUILayout.Space(-6);
+                                            GUILayout.Label($"Group state: {node.state}");
+                                            GUILayout.Space(-2);
+                                            GUILayout.Label($"Min: {node.Min}, Max: {node.Max}");
+                                        }
+                                        GUILayout.EndVertical();
+                                        GUILayout.BeginVertical();
+                                        {
+                                            GUILayout.Space(-6);
+                                            GUILayout.Label("Select");
+                                            GUILayout.Space(-2);
+                                            GUILayout.BeginHorizontal();
+                                            {
+                                                if (GUILayout.Button("Prev")) {
+                                                    node.state--;
+                                                }
+                                                if (GUILayout.Button("Next")) {
+                                                    node.state++;
+                                                }
+                                            }
+                                            GUILayout.EndHorizontal();
+                                        }
+                                        GUILayout.EndVertical();
+                                        GUILayout.Space(5);
+                                    }
+                                    GUILayout.EndHorizontal();
+                                    { // Child management
+                                        if (hasChildren) {
+                                            grpChildren.Sort();
+                                            var leftText = new GUIStyle(GUI.skin.label) {
+                                                wordWrap = false,
+                                                alignment = TextAnchor.MiddleLeft,
+                                            };
+                                            foreach (var child in grpChildren) {
+                                                GUILayout.BeginHorizontal();
+                                                {
+                                                    GUILayout.Space(5);
+                                                    GUILayout.Label($"Slot {child + 1} - {ChaControl.infoAccessory[child].Name}", leftText);
+                                                    GUILayout.FlexibleSpace();
+                                                    bool isOn = node.controlledNodes.TryGetValue(node.state, out var stateSet) && stateSet.Contains(getOutput(child));
+                                                    if (GUILayout.Button(isOn ? "On" : "Off", isOn ? bindStateStyleOn : bindStateStyleOff)) {
+                                                        if (isOn) {
+                                                            node.removeActiveNode(getOutput(child));
+                                                        } else {
+                                                            node.addActiveNode(child);
+                                                        }
+                                                    }
+                                                    if (GUILayout.Button("X")) {
+                                                        data.RemoveChild(node.index, child);
+                                                        // To finish the group
+                                                        GUILayout.EndHorizontal();
+                                                        break;
+                                                    }
+                                                    GUILayout.Space(5);
+                                                }
+                                                GUILayout.EndHorizontal();
+                                            }
+                                        }
+                                        GUILayout.BeginHorizontal();
+                                        {
+                                            GUILayout.Space(5);
+                                            if (!hasChildren) GUILayout.Label("No Children!");
+                                            GUILayout.FlexibleSpace();
+                                            if (GUILayout.Button(" + ")) {
+                                                grpBeingAddedTo = node.index;
+                                                grpAddRect = new Rect(
+                                                    simpleWindowRect.x + simpleWindowRect.width - 335f,
+                                                    simpleWindowRect.y + baseHeight + sumChildren * (childHeight) + baseBoxHeight * (i + 1) - simpleWindowScrollPosGrp.y,
+                                                    300f,
+                                                    240f
+                                                );
+                                            }
+                                            GUILayout.Space(5);
+                                        }
+                                        GUILayout.EndHorizontal();
+                                    }
+                                }
+                                GUILayout.EndVertical();
+                                GUILayout.Space(5);
+                            }
                         }
                         GUILayout.EndScrollView();
                         GUILayout.EndArea();
+
+                        void DoBindings(int i, Vector2 dropOffset) {
+                            GUILayout.BeginHorizontal();
+                            {
+                                GUILayout.Space(5);
+                                GUILayout.BeginVertical();
+                                {
+                                    GUILayout.Space(-6);
+                                    GUILayout.Label("Bound to:");
+                                    GUILayout.Space(-2);
+                                    string boundBtnLabel = data.bindings.TryGetValue(i, out var boundVal) && boundVal != null ? data.bindings[i].ToString() : "None";
+                                    if (GUILayout.Button(boundBtnLabel)) {
+                                        simpleAccBeingBound = i;
+                                        simpleAccBindRect = new Rect(
+                                            simpleWindowRect.x + dropOffset.x,
+                                            simpleWindowRect.y + dropOffset.y,
+                                            120f,
+                                            160f
+                                        );
+                                    }
+                                }
+                                GUILayout.EndVertical();
+                                if (data.bindings.TryGetValue(i, out var boundTo) && boundTo != null) {
+                                    GUILayout.BeginVertical();
+                                    {
+                                        GUILayout.Space(-6);
+                                        GUILayout.Label("ON States:");
+                                        GUILayout.Space(-2);
+                                        GUILayout.BeginHorizontal();
+                                        var bindStates = GraphData.bindingStates[boundTo.Value];
+                                        if (boundTo != BindingType.Shoes) {
+                                            if (GUILayout.Button("On", isBound(0) ? bindStateStyleOn : bindStateStyleOff)) {
+                                                toggleBoundState(0);
+                                            }
+                                            if (bindStates.Count > 1 && GUILayout.Button("Half", isBound(1) ? bindStateStyleOn : bindStateStyleOff)) {
+                                                toggleBoundState(1);
+                                            }
+                                            if (bindStates.Count > 2 && GUILayout.Button("Hang", isBound(2) ? bindStateStyleOn : bindStateStyleOff)) {
+                                                toggleBoundState(2);
+                                            }
+                                            if (GUILayout.Button("Off", isBound(3) ? bindStateStyleOn : bindStateStyleOff)) {
+                                                toggleBoundState(3);
+                                            }
+                                        } else {
+#if KKS
+                                            if (GUILayout.Button("On", isBound(0) ? bindStateStyleOn : bindStateStyleOff)) {
+                                                toggleBoundState(0);
+                                            }
+#else
+                                            if (GUILayout.Button("Indoors", isBound(0) ? bindStateStyleOn : bindStateStyleOff)) {
+                                                toggleBoundState(0);
+                                            }
+                                            if (GUILayout.Button("Outdoors", isBound(1) ? bindStateStyleOn : bindStateStyleOff)) {
+                                                toggleBoundState(1);
+                                            }
+#endif
+                                            if (GUILayout.Button("Off", isBound(3) ? bindStateStyleOn : bindStateStyleOff)) {
+                                                toggleBoundState(3);
+                                            }
+                                        }
+                                        GUILayout.EndHorizontal();
+
+                                        bool isBound(int shift) {
+                                            return data.activeBoundStates.TryGetValue(i, out var bytes) && (bytes & (1 << shift)) > 0;
+                                        }
+                                        void toggleBoundState(int shift) {
+                                            if (!data.activeBoundStates.ContainsKey(i)) {
+                                                data.activeBoundStates[i] = 0;
+                                            }
+                                            if (isBound(shift)) {
+                                                data.activeBoundStates[i] &= (byte)~(1 << shift);
+                                            } else {
+                                                data.activeBoundStates[i] |= (byte)(1 << shift);
+                                            }
+                                        }
+                                    }
+                                    GUILayout.EndVertical();
+                                } else {
+                                    GUILayout.FlexibleSpace();
+                                }
+                                GUILayout.Space(3);
+                            }
+                            GUILayout.EndHorizontal();
+                        }
                     }
 
                     simpleWindowRect = KKAPI.Utilities.IMGUIUtils.DragResizeEatWindow(simpleModeWindowID, simpleWindowRect);
@@ -1254,61 +1410,22 @@ namespace AmazingNewAccessoryLogic
                     Mathf.Max(simpleMinWidth, simpleWindowRect.width),
                     Mathf.Max(simpleMinHeight, simpleWindowRect.height)
                 );
-
-                #region Temporary elements
-                Vector2 expansion = new Vector2(10, 10);
-                // Binding selector
-                var inRect = new Rect(simpleAccBindRect.position - expansion - new Vector2(0, 20), simpleAccBindRect.size + 2 * expansion + new Vector2(0, 20));
-                if (simpleAccBeingBound > -1 && !inRect.Contains(Event.current.mousePosition)) {
-                    simpleAccBeingBound = -1;
-                }
-                if (simpleAccBeingBound > -1) {
-                    GUILayout.Window(simpleModeAccBindDropID, simpleAccBindRect, (windowId) => {
-                        // More opaque background
-                        var boxRect = new Rect(Vector2.zero, simpleAccBindRect.size);
-                        GUI.Box(boxRect, "");
-                        GUI.Box(boxRect, "");
-
-                        simpleAccBindScrollPos = GUILayout.BeginScrollView(simpleAccBindScrollPos);
-                        {
-                            if (GUILayout.Button("None")) {
-                                graphData[lfg].bindings[simpleAccBeingBound] = null;
-                                graphData[lfg].activeBoundStates.Remove(simpleAccBeingBound);
-                                simpleAccBeingBound = -1;
-                            }
-                            foreach (var opt in Enum.GetValues(typeof(BindingType))) {
-                                if (GUILayout.Button(Enum.GetName(typeof(BindingType), opt))) {
-                                    graphData[lfg].bindings[simpleAccBeingBound] = (BindingType)opt;
-                                    graphData[lfg].activeBoundStates[simpleAccBeingBound] = 0;
-                                    simpleAccBeingBound = -1;
-                                }
-                            }
-                        }
-                        GUILayout.EndScrollView();
-                    }, "", solidSkin.box);
-                    GUI.BringWindowToFront(simpleModeAccBindDropID);
-                    KKAPI.Utilities.IMGUIUtils.EatInputInRect(simpleAccBindRect);
-                }
-                #endregion
-            } else if (displayGraph && graphData[lfg].advanced)
-            {
+            } else if (displayGraph && graphData[lfg].advanced) {
                 var solidSkin = KKAPI.Utilities.IMGUIUtils.SolidBackgroundGuiSkin;
                 Rect guiRect = new Rect(screenToGUI(lfg.positionUI), new Vector2(lfg.sizeUI.x, -lfg.sizeUI.y));
 
-                if (showAdvancedInputWindow)
-                {
+                if (showAdvancedInputWindow) {
                     advancedInputWindowRect = GUI.Window(advancedInputWindowID, advancedInputWindowRect, CustomInputWindowFunction, "", KKAPI.Utilities.IMGUIUtils.SolidBackgroundGuiSkin.window);
                 }
                 GUIStyle headerTextStyle = new GUIStyle(GUI.skin.label);
                 headerTextStyle.normal.textColor = Color.black;
                 headerTextStyle.alignment = TextAnchor.MiddleLeft;
-                if (lfg.getUIScale() < 1f)
-                {
+                if (lfg.getUIScale() < 1f) {
                     headerTextStyle.fontSize = (int)(14 * lfg.getUIScale());
                     headerTextStyle.padding.top = 0;
                     headerTextStyle.padding.bottom = 0;
                     headerTextStyle.padding.left = 1;
-                }      
+                }
 
                 GUI.DrawTexture(new Rect(0, 0, Screen.width, Screen.height), rTex);
 
@@ -1335,8 +1452,7 @@ namespace AmazingNewAccessoryLogic
                     kkcompatibility = GUILayout.Toggle(kkcompatibility, "KK Compatiblity");
 #endif
                     if (GUILayout.Button(fullCharacter ? "◀ All Outfits ▶" : "◀ Current Outfit ▶")) fullCharacter = !fullCharacter;
-                    if (GUILayout.Button("Load from ASS"))
-                    {
+                    if (GUILayout.Button("Load from ASS")) {
                         if (fullCharacter) TranslateFromAssForCharacter();
                         else if (ExtendedSave.GetExtendedDataById(ChaControl.nowCoordinate, "madevil.kk.ass") == null) TranslateFromAssForCharacter(ChaControl.fileStatus.coordinateType);
                         else TranslateFromAssForCoordinate();
@@ -1344,19 +1460,16 @@ namespace AmazingNewAccessoryLogic
                     GUILayout.Space(8);
                     if (GUILayout.Button("Show Help")) showHelp = !showHelp;
                     GUILayout.Space(8);
-                
+
                     #region Studio Output Widget
-                    if (KKAPI.Studio.StudioAPI.InsideStudio)
-                    {
+                    if (KKAPI.Studio.StudioAPI.InsideStudio) {
                         GUILayout.BeginHorizontal();
                         studioAddOutputTextInput = GUILayout.TextField(studioAddOutputTextInput);
                         if (GUILayout.Button("+", GUILayout.Width(25)) && int.TryParse(studioAddOutputTextInput, out int a)) studioAddOutputTextInput = (a + 1).ToString();
                         if (GUILayout.Button("-", GUILayout.Width(25)) && int.TryParse(studioAddOutputTextInput, out int b) && b > 1) studioAddOutputTextInput = (b - 1).ToString();
                         GUILayout.EndHorizontal();
-                        if (GUILayout.Button("Add Output"))
-                        {
-                            if (int.TryParse(studioAddOutputTextInput, out int slot) && slot >= 1)
-                            {
+                        if (GUILayout.Button("Add Output")) {
+                            if (int.TryParse(studioAddOutputTextInput, out int slot) && slot >= 1) {
                                 addOutput(slot - 1);
                             }
                         }
@@ -1367,8 +1480,7 @@ namespace AmazingNewAccessoryLogic
                 KKAPI.Utilities.IMGUIUtils.EatInputInRect(normalInputRect);
 
                 #region HELP
-                if (showHelp)
-                {
+                if (showHelp) {
                     GUI.Box(new Rect(screenToGUI(lfg.positionUI + new Vector2(-255, lfg.sizeUI.y)), new Vector2(250, 350)), "HELP TEXT", KKAPI.Utilities.IMGUIUtils.SolidBackgroundGuiSkin.window);
                     GUILayout.BeginArea(new Rect(screenToGUI(lfg.positionUI + new Vector2(-255, lfg.sizeUI.y - 20)), new Vector2(250, 330)));
                     showHelpScroll = GUILayout.BeginScrollView(showHelpScroll);
@@ -1378,8 +1490,7 @@ namespace AmazingNewAccessoryLogic
                     helpLableStyle.alignment = TextAnchor.MiddleCenter;
                     helpLableStyle.wordWrap = true;
 
-                    foreach (string line in helpText)
-                    {
+                    foreach (string line in helpText) {
                         GUILayout.Label(line, helpLableStyle);
                     }
 
@@ -1389,10 +1500,57 @@ namespace AmazingNewAccessoryLogic
                 }
                 #endregion
 
-                #region Temporary IMGUI Elements
+                lfg.ongui();
+
+                #region Advanced Mode EVENTS
+                {
+                    Event e = Event.current;
+                    if (e.isMouse && e.type == EventType.MouseUp && guiRect.Contains(e.mousePosition, true)) {
+                        foreach (var kvp in getCurrentGraph().nodes) {
+                            { // Renaming
+                                if (e.button == 1 && kvp.Value.mouseOver) {
+                                    AmazingNewAccessoryLogic.Logger.LogDebug($"Renaming ({kvp.Value.label})!");
+                                    renamedNode = kvp.Key;
+                                    if (kvp.Value is LogicFlowNode_GRP grp) renameName = grp.getName();
+                                    else renameName = kvp.Value.label;
+                                    renameRect = new Rect(e.mousePosition - new Vector2(120, 20), new Vector2(240, 40));
+                                    break;
+                                }
+                            }
+                            { // Group activation selection
+                                if (e.button == 1 && kvp.Value.outputHovered && kvp.Value is LogicFlowNode_GRP grp) {
+                                    AmazingNewAccessoryLogic.Logger.LogDebug($"Selecting outputs for ({grp.getName()})...");
+                                    groupToSetActives = grp;
+                                    groupScrollRect = new Rect(e.mousePosition - new Vector2(-5, 120), new Vector2(120, 240));
+                                    groupConnections = getCurrentGraph().nodes.Values.Where(x => x.inputs.Any(y => y == grp.index)).ToList();
+                                    groupConnections.Sort((x, y) => y.positionUI.y.CompareTo(x.positionUI.y));
+                                    break;
+                                }
+                            }
+                            { // New node connection
+                                if ((e.button == 0 || e.button == 1) && kvp.Value.inputHovered != null && kvp.Value is LogicFlowOutput output) {
+                                    AmazingNewAccessoryLogic.Logger.LogDebug($"New connection to ({output.label}), syncing!");
+                                    StartCoroutine(updateLater());
+                                    break;
+                                    IEnumerator updateLater() {
+                                        yield return null;
+                                        output.forceUpdate();
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                #endregion
+            }
+
+            #region Temporary IMGUI Elements
+            {
+                var solidSkin = KKAPI.Utilities.IMGUIUtils.SolidBackgroundGuiSkin;
                 Vector2 expansion = new Vector2(10, 10);
+                var mouse = Event.current.mousePosition;
                 // Node renaming
-                if (renamedNode != null && !new Rect(renameRect.position - expansion, renameRect.size + 2 * expansion).Contains(Event.current.mousePosition)) {
+                if (renamedNode != null && !new Rect(renameRect.position - expansion, renameRect.size + 2 * expansion).Contains(mouse)) {
                     renamedNode = null;
                 }
                 if (renamedNode != null) {
@@ -1422,7 +1580,7 @@ namespace AmazingNewAccessoryLogic
                     KKAPI.Utilities.IMGUIUtils.EatInputInRect(renameRect);
                 }
                 // Group connection selection
-                if (groupToSetActives != null && !new Rect(groupScrollRect.position - expansion, groupScrollRect.size + 2 * expansion).Contains(Event.current.mousePosition)) {
+                if (groupToSetActives != null && !new Rect(groupScrollRect.position - expansion, groupScrollRect.size + 2 * expansion).Contains(mouse)) {
                     groupToSetActives = null;
                 }
                 if (groupToSetActives != null) {
@@ -1443,49 +1601,74 @@ namespace AmazingNewAccessoryLogic
                     GUI.BringWindowToFront(groupSelectWindowID);
                     KKAPI.Utilities.IMGUIUtils.EatInputInRect(groupScrollRect);
                 }
-                #endregion
+                // Binding selector
+                var inRect = new Rect(simpleAccBindRect.position - expansion - new Vector2(0, 20), simpleAccBindRect.size + 2 * expansion + new Vector2(0, 20));
+                if (simpleAccBeingBound != null && !inRect.Contains(mouse)) {
+                    simpleAccBeingBound = null;
+                }
+                if (simpleAccBeingBound != null) {
+                    GUILayout.Window(simpleModeAccBindDropID, simpleAccBindRect, (windowId) => {
+                        // More opaque background
+                        var boxRect = new Rect(Vector2.zero, simpleAccBindRect.size);
+                        GUI.Box(boxRect, "");
+                        GUI.Box(boxRect, "");
 
-                lfg.ongui();
-
-                #region EVENTS
-                Event e = Event.current;
-                if (e.isMouse && e.type == EventType.MouseUp && guiRect.Contains(e.mousePosition, true)) {
-                    foreach (var kvp in getCurrentGraph().nodes) {
-                        { // Renaming
-                            if (e.button == 1 && kvp.Value.mouseOver) {
-                                AmazingNewAccessoryLogic.Logger.LogDebug($"Renaming ({kvp.Value.label})!");
-                                renamedNode = kvp.Key;
-                                if (kvp.Value is LogicFlowNode_GRP grp) renameName = grp.getName();
-                                else renameName = kvp.Value.label;
-                                renameRect = new Rect(e.mousePosition - new Vector2(120, 20), new Vector2(240, 40));
-                                break;
+                        simpleAccBindScrollPos = GUILayout.BeginScrollView(simpleAccBindScrollPos);
+                        {
+                            if (GUILayout.Button("None")) {
+                                graphData[lfg].bindings[simpleAccBeingBound.Value] = null;
+                                graphData[lfg].activeBoundStates.Remove(simpleAccBeingBound.Value);
+                                simpleAccBeingBound = null;
                             }
-                        }
-                        { // Group activation selection
-                            if (e.button == 1 && kvp.Value.outputHovered && kvp.Value is LogicFlowNode_GRP grp) {
-                                AmazingNewAccessoryLogic.Logger.LogDebug($"Selecting outputs for ({grp.getName()})...");
-                                groupToSetActives = grp;
-                                groupScrollRect = new Rect(e.mousePosition - new Vector2(-5, 120), new Vector2(120, 240));
-                                groupConnections = getCurrentGraph().nodes.Values.Where(x => x.inputs.Any(y => y == grp.index)).ToList();
-                                groupConnections.Sort((x, y) => y.label.CompareTo(x.label));
-                                break;
-                            }
-                        }
-                        { // New node connection
-                            if ((e.button == 0 || e.button == 1) && kvp.Value.inputHovered != null && kvp.Value is LogicFlowOutput output) {
-                                AmazingNewAccessoryLogic.Logger.LogDebug($"New connection to ({output.label}), syncing!");
-                                StartCoroutine(updateLater());
-                                break;
-                                IEnumerator updateLater() {
-                                    yield return null;
-                                    output.forceUpdate();
+                            foreach (var opt in Enum.GetValues(typeof(BindingType))) {
+                                if (GUILayout.Button(Enum.GetName(typeof(BindingType), opt))) {
+                                    graphData[lfg].bindings[simpleAccBeingBound.Value] = (BindingType)opt;
+                                    graphData[lfg].activeBoundStates[simpleAccBeingBound.Value] = 0;
+                                    simpleAccBeingBound = null;
                                 }
                             }
                         }
-                    }
+                        GUILayout.EndScrollView();
+                    }, "", solidSkin.box);
+                    GUI.BringWindowToFront(simpleModeAccBindDropID);
+                    KKAPI.Utilities.IMGUIUtils.EatInputInRect(simpleAccBindRect);
                 }
-                #endregion
+                // New child selection
+                inRect = new Rect(grpAddRect.position - expansion - new Vector2(0, 20), grpAddRect.size + 2 * expansion + new Vector2(0, 20));
+                if (grpBeingAddedTo != null && !inRect.Contains(mouse)) {
+                    grpBeingAddedTo = null;
+                }
+                if (grpBeingAddedTo != null) {
+                    GUILayout.Window(simpleModeGroupAddID, grpAddRect, (windowId) => {
+                        // More opaque background
+                        var boxRect = new Rect(Vector2.zero, grpAddRect.size);
+                        GUI.Box(boxRect, "");
+                        GUI.Box(boxRect, "");
+
+                        var allChildren = graphData[lfg].GetAllChildIndices();
+                        var leftText = new GUIStyle(GUI.skin.button) {
+                            wordWrap = false,
+                            alignment = TextAnchor.MiddleLeft,
+                        };
+                        grpAddScrollPos = GUILayout.BeginScrollView(grpAddScrollPos);
+                        {
+                            for (int i = 0; i < ChaControl.infoAccessory.Length; i++) {
+                                if (ChaControl.infoAccessory[i] == null) continue;
+                                if (allChildren.Contains(i)) continue;
+                                if (GUILayout.Button($"Slot {i + 1} - {ChaControl.infoAccessory[i].Name}", leftText)) {
+                                    graphData[lfg].AddChild(grpBeingAddedTo.Value, i);
+                                    grpBeingAddedTo = null;
+                                    break;
+                                }
+                            }
+                        }
+                        GUILayout.EndScrollView();
+                    }, "", solidSkin.box);
+                    GUI.BringWindowToFront(simpleModeGroupAddID);
+                    KKAPI.Utilities.IMGUIUtils.EatInputInRect(grpAddRect);
+                }
             }
+            #endregion
         }
 #endregion
 

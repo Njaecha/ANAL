@@ -44,12 +44,45 @@ namespace AmazingNewAccessoryLogic {
             }
         }
 
+        private Dictionary<int, List<int>> groupChildren = new Dictionary<int, List<int>>();
         public Dictionary<int, BindingType?> bindings = new Dictionary<int, BindingType?>();
         public Dictionary<int, byte> activeBoundStates = new Dictionary<int, byte>();
 
         public GraphData(LogicFlowGraph logicGraph, bool isAdvanced) {
             graph = logicGraph;
             _advanced = isAdvanced;
+        }
+
+        public void AddChild(int grpIdx, int childSlot) {
+            if (!groupChildren.ContainsKey(grpIdx)) {
+                groupChildren.Add(grpIdx, new List<int>());
+            }
+            groupChildren[grpIdx].Add(childSlot);
+
+            var ctrl = AnalCharaController.dicGraphToControl[graph];
+            int outfit = ctrl.graphs.Keys.FirstOrDefault(x => ctrl.graphs[x] == graph);
+            if (ctrl.getOutput(childSlot, outfit) == null) {
+                ctrl.addOutput(childSlot, outfit);
+            }
+        }
+
+        public bool RemoveChild(int grpIdx, int childSlot) {
+            if (!groupChildren.ContainsKey(grpIdx)) return false;
+            return groupChildren[grpIdx].Remove(childSlot);
+        }
+
+        public bool TryGetChildren(int grpIdx, out List<int> children) {
+            return groupChildren.TryGetValue(grpIdx, out children);
+        }
+
+        public HashSet<int> GetAllChildIndices() {
+            var result = new HashSet<int>();
+            foreach (var kvp in groupChildren) {
+                foreach (var child in kvp.Value) {
+                    result.Add(child);
+                }
+            }
+            return result;
         }
     }
 

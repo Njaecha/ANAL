@@ -1,6 +1,8 @@
 ﻿using LogicFlows;
 using UnityEngine;
 using System.Collections.Generic;
+using NodeCanvas.Framework;
+using System.Linq;
 
 namespace AmazingNewAccessoryLogic {
     public class LogicFlowNode_GRP : LogicFlowGate {
@@ -17,6 +19,9 @@ namespace AmazingNewAccessoryLogic {
             }
         }
 
+        public int Min { get; private set; }
+        public int Max { get; private set; }
+
         // dic<state, set<enabledThingForThisState>>
         internal Dictionary<int, HashSet<LogicFlowNode>> controlledNodes = new Dictionary<int, HashSet<LogicFlowNode>>();
 
@@ -26,26 +31,39 @@ namespace AmazingNewAccessoryLogic {
         }
 
         private void calcTooltip() {
-            int min = 0;
-            int max = 0;
+            Min = 0;
+            Max = 0;
             foreach (var kvp in controlledNodes) {
                 if (kvp.Value.Count > 0) {
-                    if (kvp.Key < min) min = kvp.Key;
-                    if (kvp.Key > max) max = kvp.Key;
+                    if (kvp.Key < Min) Min = kvp.Key;
+                    if (kvp.Key > Max) Max = kvp.Key;
                 }
             }
-            toolTipText = $"Group Node (Min: {min}, Max: {max})";
+            toolTipText = $"Group Node (Min: {Min}, Max: {Max})";
         }
 
-        public void addActiveNode(LogicFlowNode node, int? __state = null) {
-            int stateToAddTo = __state.GetValueOrDefault(state);
+        public void addActiveNode(int slot, int? state = null) {
+            LogicFlowNode node;
+            if (parentGraph.getNodeAt(slot + 1000000) == null) {
+                var ctrl = AnalCharaController.dicGraphToControl[parentGraph];
+                int outfit = ctrl.graphs.Keys.FirstOrDefault(x => ctrl.graphs[x] == parentGraph);
+                node = AnalCharaController.dicGraphToControl[parentGraph].addOutput(slot, outfit);
+            } else {
+                node = parentGraph.getNodeAt(1000000 + slot);
+            }
+            addActiveNode(node, state);
+        }
+
+        public void addActiveNode(LogicFlowNode node, int? state = null) {
+            int stateToAddTo = state.GetValueOrDefault(this.state);
             if (!controlledNodes.ContainsKey(stateToAddTo)) controlledNodes[stateToAddTo] = new HashSet<LogicFlowNode>();
             controlledNodes[stateToAddTo].Add(node);
             calcTooltip();
         }
 
-        public bool removeActiveNode(LogicFlowNode node, int? __state = null) {
-            int stateToRemoveFrom = __state.GetValueOrDefault(state);
+        public bool removeActiveNode(LogicFlowNode node, int? state = null) {
+            if (node == null) return false;
+            int stateToRemoveFrom = state.GetValueOrDefault(this.state);
             if (!controlledNodes.ContainsKey(stateToRemoveFrom)) return false;
             bool result = controlledNodes[stateToRemoveFrom].Remove(node);
             calcTooltip();
