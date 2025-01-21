@@ -472,7 +472,7 @@ namespace AmazingNewAccessoryLogic
         /// <param name="inId2"></param>
         /// <param name="outfit"></param>
         /// <returns></returns>
-        private LogicFlowNode_OR addOrGateForInputs(int inId1, int inId2, int outfit)
+        internal LogicFlowNode_OR addOrGateForInputs(int inId1, int inId2, int outfit)
         {
             if (!graphs.ContainsKey(outfit)) return null;
             LogicFlowNode logicFlowNode = graphs[outfit].getAllNodes().Find(node =>
@@ -505,7 +505,7 @@ namespace AmazingNewAccessoryLogic
         /// <param name="inId2"></param>
         /// <param name="outfit"></param>
         /// <returns></returns>
-        private LogicFlowNode_AND addAndGateForInputs(int inId1, int inId2, int outfit)
+        internal LogicFlowNode_AND addAndGateForInputs(int inId1, int inId2, int outfit)
         {
             if (!graphs.ContainsKey(outfit)) return null;
             LogicFlowNode logicFlowNode = graphs[outfit].getAllNodes().Find(node =>
@@ -537,7 +537,7 @@ namespace AmazingNewAccessoryLogic
         /// <param name="inId"></param>
         /// <param name="outfit"></param>
         /// <returns></returns>
-        private LogicFlowNode_NOT addNotForInput(int inId, int outfit)
+        internal LogicFlowNode_NOT addNotForInput(int inId, int outfit)
         {
             if (!graphs.ContainsKey(outfit)) return null;
             LogicFlowNode logicFlowNode = graphs[outfit].getAllNodes().Find(node => node != null && node is LogicFlowNode_NOT && node.inputAt(0) != null && node.inputAt(0).index == inId);
@@ -1211,6 +1211,7 @@ namespace AmazingNewAccessoryLogic
                                             renameName = node.getName();
                                         }
                                         if (GUILayout.Button("X")) {
+                                            data.RemoveGroup(node.index);
                                             lfg.RemoveNode(node.index);
                                         }
                                         GUILayout.Space(-2);
@@ -1386,6 +1387,7 @@ namespace AmazingNewAccessoryLogic
                                             } else {
                                                 data.activeBoundStates[i] |= (byte)(1 << shift);
                                             }
+                                            data.MakeGraph();
                                         }
                                     }
                                     GUILayout.EndVertical();
@@ -1410,7 +1412,7 @@ namespace AmazingNewAccessoryLogic
                     Mathf.Max(simpleMinWidth, simpleWindowRect.width),
                     Mathf.Max(simpleMinHeight, simpleWindowRect.height)
                 );
-            } else if (displayGraph && graphData[lfg].advanced) {
+            } /* else */ if (displayGraph /* && graphData[lfg].advanced */) {
                 var solidSkin = KKAPI.Utilities.IMGUIUtils.SolidBackgroundGuiSkin;
                 Rect guiRect = new Rect(screenToGUI(lfg.positionUI), new Vector2(lfg.sizeUI.x, -lfg.sizeUI.y));
 
@@ -1618,12 +1620,14 @@ namespace AmazingNewAccessoryLogic
                             if (GUILayout.Button("None")) {
                                 graphData[lfg].bindings[simpleAccBeingBound.Value] = null;
                                 graphData[lfg].activeBoundStates.Remove(simpleAccBeingBound.Value);
+                                graphData[lfg].MakeGraph();
                                 simpleAccBeingBound = null;
                             }
                             foreach (var opt in Enum.GetValues(typeof(BindingType))) {
                                 if (GUILayout.Button(Enum.GetName(typeof(BindingType), opt))) {
                                     graphData[lfg].bindings[simpleAccBeingBound.Value] = (BindingType)opt;
                                     graphData[lfg].activeBoundStates[simpleAccBeingBound.Value] = 0;
+                                    graphData[lfg].MakeGraph();
                                     simpleAccBeingBound = null;
                                 }
                             }
