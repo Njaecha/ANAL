@@ -133,6 +133,7 @@ namespace AmazingNewAccessoryLogic
             } else {
                 sn.data = new List<int>();
             }
+            sn.data2 = new List<object> { grp.state };
             sn.data3 = new Dictionary<int, List<int>>();
             foreach (var kvp in grp.controlledNodes
                 .Where(x => x.Value.Count > 0)

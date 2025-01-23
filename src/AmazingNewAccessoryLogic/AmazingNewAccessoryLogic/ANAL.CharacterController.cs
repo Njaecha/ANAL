@@ -30,7 +30,7 @@ namespace AmazingNewAccessoryLogic
         internal static Dictionary<LogicFlowGraph, AnalCharaController> dicGraphToControl = new Dictionary<LogicFlowGraph, AnalCharaController>();
         private Dictionary<LogicFlowGraph, GraphData> graphData = new Dictionary<LogicFlowGraph, GraphData>();
         internal Dictionary<int, LogicFlowGraph> graphs = new Dictionary<int, LogicFlowGraph>();
-        private Dictionary<int, List<int>> activeSlots = new Dictionary<int, List<int>>();
+        internal Dictionary<int, List<int>> activeSlots = new Dictionary<int, List<int>>();
 
         internal bool displayGraph = false;
         private static Material mat = new Material(Shader.Find("Hidden/Internal-Colored"));
@@ -44,13 +44,16 @@ namespace AmazingNewAccessoryLogic
         {
             if (graphs.Count == 0) return;
             PluginData data = new PluginData();
-            Dictionary<int, SerialisedGraph> sCharaData = new Dictionary<int, SerialisedGraph>();
+            Dictionary<int, SerialisedGraph> sCharaGraphs = new Dictionary<int, SerialisedGraph>();
+            Dictionary<int, SerialisedGraphData> sCharaGraphData = new Dictionary<int, SerialisedGraphData>();
             foreach(int outfit in graphs.Keys)
             {
                 if (graphs[outfit].getAllNodes().Count == Enum.GetNames(typeof(InputKey)).Length) continue; 
-                sCharaData.Add(outfit, SerialisedGraph.Serialise(graphs[outfit], graphData[graphs[outfit]].advanced));
+                sCharaGraphs.Add(outfit, SerialisedGraph.Serialise(graphs[outfit]));
+                sCharaGraphData.Add(outfit, SerialisedGraphData.Serialise(outfit, graphData[graphs[outfit]]));
             }
-            data.data.Add("Graphs", MessagePackSerializer.Serialize(sCharaData));
+            data.data.Add("Graphs", MessagePackSerializer.Serialize(sCharaGraphs));
+            data.data.Add("GraphData", MessagePackSerializer.Serialize(sCharaGraphData));
             data.data.Add("Version", (byte)1);
             SetExtendedData(data);
         }
@@ -76,13 +79,16 @@ namespace AmazingNewAccessoryLogic
             }
             if (version == 1)
             {
-                Dictionary<int, SerialisedGraph> sGraphs = new Dictionary<int, SerialisedGraph>();
-                if (data.data.TryGetValue("Graphs", out var graphsSerialised) && graphsSerialised != null)
-                {
+                Dictionary<int, SerialisedGraph> sGraphs;
+                Dictionary<int, SerialisedGraphData> sGraphData = null;
+                if (data.data.TryGetValue("Graphs", out var graphsSerialised) && graphsSerialised != null) {
                     sGraphs = MessagePackSerializer.Deserialize<Dictionary<int, SerialisedGraph>>((byte[])graphsSerialised);
+                    if (data.data.TryGetValue("GraphData", out var graphDataSerialised) && graphDataSerialised != null) {
+                        sGraphData = MessagePackSerializer.Deserialize<Dictionary<int, SerialisedGraphData>>((byte[])graphDataSerialised);
+                    }
                     foreach(int outfit in sGraphs.Keys)
                     {
-                        deserialiseGraph(outfit, sGraphs[outfit]);
+                        deserialiseGraph(outfit, sGraphs[outfit], sGraphData != null ? sGraphData[outfit] : null);
                         AmazingNewAccessoryLogic.Logger.LogDebug($"Loaded Logic Graph for outfit {outfit}");
                     }
                     lfg?.ForceUpdate();
@@ -97,8 +103,10 @@ namespace AmazingNewAccessoryLogic
             PluginData data = new PluginData();
             int coord = ChaControl.fileStatus.coordinateType;
             if (!graphs.ContainsKey(coord)) return;
-            SerialisedGraph sGraph = SerialisedGraph.Serialise(graphs[coord], graphData[graphs[coord]].advanced);
+            SerialisedGraph sGraph = SerialisedGraph.Serialise(graphs[coord]);
+            SerialisedGraphData sGraphData = SerialisedGraphData.Serialise(coord, graphData[graphs[coord]]);
             data.data.Add("Graph", MessagePackSerializer.Serialize(sGraph));
+            data.data.Add("GraphData", MessagePackSerializer.Serialize(sGraphData));
             data.data.Add("Version", (byte)1);
             SetCoordinateExtendedData(coordinate, data);
         }
@@ -135,9 +143,13 @@ namespace AmazingNewAccessoryLogic
                 if (data.data.TryGetValue("Graph", out var serialisedGraph) && serialisedGraph != null)
                 {
                     SerialisedGraph sGraph = MessagePackSerializer.Deserialize<SerialisedGraph>((byte[])serialisedGraph);
+                    SerialisedGraphData sGraphData = null;
+                    if (data.data.TryGetValue("GraphData", out var serialisedGraphData) && serialisedGraphData != null) {
+                        sGraphData = MessagePackSerializer.Deserialize<SerialisedGraphData>((byte[])serialisedGraphData);
+                    }
                     if (sGraph != null)
                     {
-                        deserialiseGraph(coordIdx, sGraph);
+                        deserialiseGraph(coordIdx, sGraph, sGraphData);
                         AmazingNewAccessoryLogic.Logger.LogDebug($"Loaded Logic Graph for outfit {coordIdx}");
                     }
                     lfg?.ForceUpdate();
@@ -183,7 +195,7 @@ namespace AmazingNewAccessoryLogic
         }
         #endregion
         #region Deserialisation
-        private void deserialiseGraph(int outfit, SerialisedGraph sGraph)
+        private void deserialiseGraph(int outfit, SerialisedGraph sGraph, SerialisedGraphData sGraphData = null)
         {
             var newGraph = new LogicFlowGraph(new Rect(new Vector2(200, 200), sGraph.size));
             graphs.Add(outfit, newGraph);
@@ -191,16 +203,15 @@ namespace AmazingNewAccessoryLogic
             newGraph.isLoading = true;
             foreach (SerialisedNode sNode in sGraph.nodes.Where(x => x.type != SerialisedNode.NodeType.Gate_GRP)) deserialiseNode(outfit, sNode);
             foreach (SerialisedNode sNode in sGraph.nodes.Where(x => x.type == SerialisedNode.NodeType.Gate_GRP)) deserialiseNode(outfit, sNode);
-            graphData.Add(graphs[outfit], new GraphData(newGraph, sGraph.advanced));
+            graphData.Add(graphs[outfit], new GraphData(newGraph, sGraphData));
+            if (sGraphData == null) graphData[graphs[outfit]].advanced = true;
             newGraph.isLoading = false;
             dicGraphToControl.Add(newGraph, this);
         }
 
-        SerialisedNode lastSnode = null;
         private void deserialiseNode(int outfit, SerialisedNode sNode)
         {
             LogicFlowNode node = null;
-            lastSnode = sNode;
             switch (sNode.type) {
                 case SerialisedNode.NodeType.Gate_NOT:
                     node = new LogicFlowNode_NOT(graphs[outfit], key: sNode.index) { label = sNode.name ?? "NOT", toolTipText = "NOT" };
@@ -311,7 +322,7 @@ namespace AmazingNewAccessoryLogic
             if (graphs == null) graphs = new Dictionary<int, LogicFlowGraph>();
             if (graphData == null) graphData = new Dictionary<LogicFlowGraph, GraphData>();
             graphs[outfit.Value] = new LogicFlowGraph(new Rect(new Vector2(100,10), new Vector2(500, 900)));
-            graphData[graphs[outfit.Value]] = new GraphData(graphs[outfit.Value], false);
+            graphData[graphs[outfit.Value]] = new GraphData(graphs[outfit.Value]);
             if (activeSlots == null) activeSlots = new Dictionary<int, List<int>>();
             dicGraphToControl.Add(graphs[outfit.Value], this);
             activeSlots[outfit.Value] = new List<int>();
@@ -1315,6 +1326,7 @@ namespace AmazingNewAccessoryLogic
                         GUILayout.EndArea();
 
                         void DoBindings(int i, Vector2 dropOffset) {
+                            var binding = data.GetNodeBinding(i);
                             GUILayout.BeginHorizontal();
                             {
                                 GUILayout.Space(5);
@@ -1323,7 +1335,7 @@ namespace AmazingNewAccessoryLogic
                                     GUILayout.Space(-6);
                                     GUILayout.Label("Bound to:");
                                     GUILayout.Space(-2);
-                                    string boundBtnLabel = data.bindings.TryGetValue(i, out var boundVal) && boundVal != null ? data.bindings[i].ToString() : "None";
+                                    string boundBtnLabel = binding != null ? binding.Value.ToString() : "None";
                                     if (GUILayout.Button(boundBtnLabel)) {
                                         simpleAccBeingBound = i;
                                         simpleAccBindRect = new Rect(
@@ -1335,15 +1347,15 @@ namespace AmazingNewAccessoryLogic
                                     }
                                 }
                                 GUILayout.EndVertical();
-                                if (data.bindings.TryGetValue(i, out var boundTo) && boundTo != null) {
+                                if (binding != null) {
                                     GUILayout.BeginVertical();
                                     {
                                         GUILayout.Space(-6);
                                         GUILayout.Label("ON States:");
                                         GUILayout.Space(-2);
                                         GUILayout.BeginHorizontal();
-                                        var bindStates = GraphData.bindingStates[boundTo.Value];
-                                        if (boundTo != BindingType.Shoes) {
+                                        var bindStates = GraphData.bindingStates[binding.Value];
+                                        if (binding != BindingType.Shoes) {
                                             if (GUILayout.Button("On", isBound(0) ? bindStateStyleOn : bindStateStyleOff)) {
                                                 toggleBoundState(0);
                                             }
@@ -1376,18 +1388,14 @@ namespace AmazingNewAccessoryLogic
                                         GUILayout.EndHorizontal();
 
                                         bool isBound(int shift) {
-                                            return data.activeBoundStates.TryGetValue(i, out var bytes) && (bytes & (1 << shift)) > 0;
+                                            return data.GetBoundState(i, shift);
                                         }
                                         void toggleBoundState(int shift) {
-                                            if (!data.activeBoundStates.ContainsKey(i)) {
-                                                data.activeBoundStates[i] = 0;
-                                            }
                                             if (isBound(shift)) {
-                                                data.activeBoundStates[i] &= (byte)~(1 << shift);
+                                                data.SetBoundState(i, shift, false);
                                             } else {
-                                                data.activeBoundStates[i] |= (byte)(1 << shift);
+                                                data.SetBoundState(i, shift, true);
                                             }
-                                            data.MakeGraph();
                                         }
                                     }
                                     GUILayout.EndVertical();
@@ -1618,16 +1626,14 @@ namespace AmazingNewAccessoryLogic
                         simpleAccBindScrollPos = GUILayout.BeginScrollView(simpleAccBindScrollPos);
                         {
                             if (GUILayout.Button("None")) {
-                                graphData[lfg].bindings[simpleAccBeingBound.Value] = null;
-                                graphData[lfg].activeBoundStates.Remove(simpleAccBeingBound.Value);
-                                graphData[lfg].MakeGraph();
+                                graphData[lfg].SetNodeBinding(simpleAccBeingBound.Value, null);
+                                graphData[lfg].SetBoundStates(simpleAccBeingBound.Value, 0);
                                 simpleAccBeingBound = null;
                             }
                             foreach (var opt in Enum.GetValues(typeof(BindingType))) {
                                 if (GUILayout.Button(Enum.GetName(typeof(BindingType), opt))) {
-                                    graphData[lfg].bindings[simpleAccBeingBound.Value] = (BindingType)opt;
-                                    graphData[lfg].activeBoundStates[simpleAccBeingBound.Value] = 0;
-                                    graphData[lfg].MakeGraph();
+                                    graphData[lfg].SetNodeBinding(simpleAccBeingBound.Value, (BindingType)opt);
+                                    graphData[lfg].SetBoundStates(simpleAccBeingBound.Value, 0);
                                     simpleAccBeingBound = null;
                                 }
                             }
