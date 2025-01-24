@@ -1077,6 +1077,8 @@ namespace AmazingNewAccessoryLogic
         private static GUIStyle bindStateStyleOff = null;
         private static GUIStyle bindStateStyleOn = null;
 
+        private static GUIStyle whiteBox = null;
+
         private int? grpBeingAddedTo = null;
         private Rect grpAddRect = new Rect();
         private Vector2 grpAddScrollPos = Vector2.zero;
@@ -1086,18 +1088,7 @@ namespace AmazingNewAccessoryLogic
             if (lfg == null) return;
 
             if (bindStateStyleOff == null || bindStateStyleOn == null) {
-                var offCol = new Color(221 / 255f, 60 / 255f, 60 / 255f);
-                bindStateStyleOff = new GUIStyle(GUI.skin.button);
-                bindStateStyleOff.normal.textColor = offCol;
-                bindStateStyleOff.hover.textColor = offCol;
-                bindStateStyleOff.active.textColor = offCol;
-                bindStateStyleOff.focused.textColor = offCol;
-                var onCol = new Color(34 / 255f, 195 / 255f, 34 / 255f);
-                bindStateStyleOn = new GUIStyle(GUI.skin.button);
-                bindStateStyleOn.normal.textColor = onCol;
-                bindStateStyleOn.hover.textColor = onCol;
-                bindStateStyleOn.active.textColor = onCol;
-                bindStateStyleOn.focused.textColor = onCol;
+                InitGUI();
             }
 
             if (displayGraph && !graphData[lfg].advanced) {
@@ -1408,6 +1399,7 @@ namespace AmazingNewAccessoryLogic
                         }
                     }
 
+                    GUI.Box(new Rect(simpleWindowRect.size - new Vector2(13, 13), new Vector2(13, 13)), "", whiteBox);
                     simpleWindowRect = KKAPI.Utilities.IMGUIUtils.DragResizeEatWindow(simpleModeWindowID, simpleWindowRect);
                 }, $"ANAL v{AmazingNewAccessoryLogic.Version} - Simple Mode", solidSkin.window);
                 var sWP = simpleWindowRect.position;
@@ -1680,7 +1672,46 @@ namespace AmazingNewAccessoryLogic
             }
             #endregion
         }
-#endregion
+
+        void InitGUI() {
+            var offCol = new Color(221 / 255f, 60 / 255f, 60 / 255f);
+            bindStateStyleOff = new GUIStyle(GUI.skin.button);
+            bindStateStyleOff.normal.textColor = offCol;
+            bindStateStyleOff.hover.textColor = offCol;
+            bindStateStyleOff.active.textColor = offCol;
+            bindStateStyleOff.focused.textColor = offCol;
+            var onCol = new Color(34 / 255f, 195 / 255f, 34 / 255f);
+            bindStateStyleOn = new GUIStyle(GUI.skin.button);
+            bindStateStyleOn.normal.textColor = onCol;
+            bindStateStyleOn.hover.textColor = onCol;
+            bindStateStyleOn.active.textColor = onCol;
+            bindStateStyleOn.focused.textColor = onCol;
+
+            whiteBox = new GUIStyle(GUI.skin.box);
+            int size = 13;
+            int half = Mathf.FloorToInt((size + 1) / 2f);
+            Texture2D newBg = new Texture2D(size, size, TextureFormat.RGBA32, true);
+            for (int i = 0; i < half; i++) {
+                for (int j = 0; j < half; j++) {
+                    var col = Color.clear;
+                    if (i + j == 3) {
+                        col = Color.white;
+                    } else if (i + j > 3) {
+                        col = new Color(1, 1, 1, 0.8f);
+                    }
+                    newBg.SetPixel(i, j, col);
+                    newBg.SetPixel(i, size - j - 1, col);
+                    newBg.SetPixel(size - i - 1, j, col);
+                    newBg.SetPixel(size - i - 1, size - j - 1, col);
+                }
+            }
+            newBg.Apply();
+            whiteBox.normal.background = newBg;
+            whiteBox.hover.background = newBg;
+            whiteBox.active.background = newBg;
+            whiteBox.focused.background = newBg;
+        }
+        #endregion
 
         #region Advanced Input GUI
         private bool showAdvancedInputWindow = false;
