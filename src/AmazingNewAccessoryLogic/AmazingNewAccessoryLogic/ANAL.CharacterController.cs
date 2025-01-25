@@ -23,6 +23,7 @@ namespace AmazingNewAccessoryLogic
         public const int simpleModeGroupAddID = 2233566;
 
         public static readonly Vector2 defaultGraphSize = new Vector2(600, 900);
+        public static readonly byte saveVersion = 2;
 
         public LogicFlowGraph lfg { get => getCurrentGraph(); private set => setCurrentGraph(value); }
 
@@ -55,7 +56,7 @@ namespace AmazingNewAccessoryLogic
             }
             data.data.Add("Graphs", MessagePackSerializer.Serialize(sCharaGraphs));
             data.data.Add("GraphData", MessagePackSerializer.Serialize(sCharaGraphData));
-            data.data.Add("Version", (byte)1);
+            data.data.Add("Version", saveVersion);
             SetExtendedData(data);
         }
 
@@ -78,7 +79,7 @@ namespace AmazingNewAccessoryLogic
             {
                 version = (byte)versionS;
             }
-            if (version == 1)
+            if (version <= 2)
             {
                 Dictionary<int, SerialisedGraph> sGraphs;
                 Dictionary<int, SerialisedGraphData> sGraphData = null;
@@ -89,7 +90,7 @@ namespace AmazingNewAccessoryLogic
                     }
                     foreach(int outfit in sGraphs.Keys)
                     {
-                        deserialiseGraph(outfit, sGraphs[outfit], sGraphData != null ? sGraphData[outfit] : null);
+                        deserialiseGraph(version, outfit, sGraphs[outfit], sGraphData != null ? sGraphData[outfit] : null);
                         AmazingNewAccessoryLogic.Logger.LogDebug($"Loaded Logic Graph for outfit {outfit}");
                     }
                     lfg?.ForceUpdate();
@@ -108,7 +109,7 @@ namespace AmazingNewAccessoryLogic
             SerialisedGraphData sGraphData = SerialisedGraphData.Serialise(coord, graphData[graphs[coord]]);
             data.data.Add("Graph", MessagePackSerializer.Serialize(sGraph));
             data.data.Add("GraphData", MessagePackSerializer.Serialize(sGraphData));
-            data.data.Add("Version", (byte)1);
+            data.data.Add("Version", saveVersion);
             SetCoordinateExtendedData(coordinate, data);
         }
 
@@ -139,7 +140,7 @@ namespace AmazingNewAccessoryLogic
             {
                 version = (byte)versionS;
             }
-            if (version == 1)
+            if (version <= 2)
             {
                 if (data.data.TryGetValue("Graph", out var serialisedGraph) && serialisedGraph != null)
                 {
@@ -150,7 +151,7 @@ namespace AmazingNewAccessoryLogic
                     }
                     if (sGraph != null)
                     {
-                        deserialiseGraph(coordIdx, sGraph, sGraphData);
+                        deserialiseGraph(version, coordIdx, sGraph, sGraphData);
                         AmazingNewAccessoryLogic.Logger.LogDebug($"Loaded Logic Graph for outfit {coordIdx}");
                     }
                     lfg?.ForceUpdate();
@@ -185,32 +186,32 @@ namespace AmazingNewAccessoryLogic
                 if (sOutput == null) continue;
                 List<int> iTree = sOutput.getInputTree();
                 LogicFlowOutput dOutput = (LogicFlowOutput)graphs[destinationOutfit].getNodeAt(1000000 + slot);
-                if (dOutput == null) deserialiseNode(destinationOutfit, SerialisedNode.Serialise(graphs[sourceOutift].getNodeAt(1000000 + slot), graphs[sourceOutift]));
+                if (dOutput == null) deserialiseNode(saveVersion, destinationOutfit, SerialisedNode.Serialise(graphs[sourceOutift].getNodeAt(1000000 + slot), graphs[sourceOutift]));
                 foreach(int index in iTree)
                 {
                     LogicFlowNode node = graphs[destinationOutfit].getNodeAt(index);
-                    if (node == null) deserialiseNode(destinationOutfit, SerialisedNode.Serialise(graphs[sourceOutift].getNodeAt(index), graphs[sourceOutift]));
+                    if (node == null) deserialiseNode(saveVersion, destinationOutfit, SerialisedNode.Serialise(graphs[sourceOutift].getNodeAt(index), graphs[sourceOutift]));
                 }
             }
             graphs[destinationOutfit].isLoading = false;
         }
         #endregion
         #region Deserialisation
-        private void deserialiseGraph(int outfit, SerialisedGraph sGraph, SerialisedGraphData sGraphData = null)
+        private void deserialiseGraph(int version, int outfit, SerialisedGraph sGraph, SerialisedGraphData sGraphData = null)
         {
             var newGraph = new LogicFlowGraph(new Rect(new Vector2(200, 200), sGraph.size));
             graphs.Add(outfit, newGraph);
             activeSlots[outfit] = new List<int>();
             newGraph.isLoading = true;
-            foreach (SerialisedNode sNode in sGraph.nodes.Where(x => x.type != SerialisedNode.NodeType.Gate_GRP)) deserialiseNode(outfit, sNode);
-            foreach (SerialisedNode sNode in sGraph.nodes.Where(x => x.type == SerialisedNode.NodeType.Gate_GRP)) deserialiseNode(outfit, sNode);
+            foreach (SerialisedNode sNode in sGraph.nodes.Where(x => x.type != SerialisedNode.NodeType.Gate_GRP)) deserialiseNode(version, outfit, sNode);
+            foreach (SerialisedNode sNode in sGraph.nodes.Where(x => x.type == SerialisedNode.NodeType.Gate_GRP)) deserialiseNode(version, outfit, sNode);
             graphData.Add(graphs[outfit], new GraphData(newGraph, sGraphData));
             if (sGraphData == null) graphData[graphs[outfit]].advanced = true;
             newGraph.isLoading = false;
             dicGraphToControl.Add(newGraph, this);
         }
 
-        private void deserialiseNode(int outfit, SerialisedNode sNode)
+        private void deserialiseNode(int version, int outfit, SerialisedNode sNode)
         {
             LogicFlowNode node = null;
             switch (sNode.type) {
@@ -251,8 +252,13 @@ namespace AmazingNewAccessoryLogic
                     node = addInput((InputKey)sNode.index, sNode.position, outfit, sNode.name);
                     break;
                 case SerialisedNode.NodeType.Output:
-                    node = addOutput(sNode.index - 1000000, outfit, sNode.name);
-                    if (sNode.data?.Count > 0) node.SetInput(sNode.data[0], 0);
+                    if (version == 1) {
+                        node = addOutput(sNode.data[0], outfit);
+                        node.SetInput(sNode.data[1], 0);
+                    } else {
+                        node = addOutput(sNode.index - 1000000, outfit, sNode.name);
+                        if (sNode.data?.Count > 0) node.SetInput(sNode.data[0], 0);
+                    }
                     break;
                 case SerialisedNode.NodeType.AdvancedInput:
                     node = deserialiseAdvancedInputNode(outfit, sNode, (AdvancedInputType)sNode.data2[0]);
