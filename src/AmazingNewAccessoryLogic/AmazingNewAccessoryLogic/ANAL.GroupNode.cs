@@ -1,8 +1,7 @@
 ﻿using LogicFlows;
 using UnityEngine;
-using System.Collections.Generic;
-using NodeCanvas.Framework;
 using System.Linq;
+using System.Collections.Generic;
 
 namespace AmazingNewAccessoryLogic {
     public class LogicFlowNode_GRP : LogicFlowGate {

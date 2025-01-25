@@ -9,7 +9,6 @@ using KKAPI.Maker;
 using System.Collections;
 using ExtensibleSaveFormat;
 using System.Collections.Generic;
-using static GameCursor;
 
 namespace AmazingNewAccessoryLogic
 {
@@ -22,6 +21,8 @@ namespace AmazingNewAccessoryLogic
         public const int simpleModeWindowID = 2233544;
         public const int simpleModeAccBindDropID = 2233555;
         public const int simpleModeGroupAddID = 2233566;
+
+        public static readonly Vector2 defaultGraphSize = new Vector2(600, 900);
 
         public LogicFlowGraph lfg { get => getCurrentGraph(); private set => setCurrentGraph(value); }
 
@@ -321,7 +322,7 @@ namespace AmazingNewAccessoryLogic
             if (!outfit.HasValue) outfit = ChaControl.fileStatus.coordinateType;
             if (graphs == null) graphs = new Dictionary<int, LogicFlowGraph>();
             if (graphData == null) graphData = new Dictionary<LogicFlowGraph, GraphData>();
-            graphs[outfit.Value] = new LogicFlowGraph(new Rect(new Vector2(100,10), new Vector2(500, 900)));
+            graphs[outfit.Value] = new LogicFlowGraph(new Rect(new Vector2(100,10), defaultGraphSize));
             graphData[graphs[outfit.Value]] = new GraphData(graphs[outfit.Value]);
             if (activeSlots == null) activeSlots = new Dictionary<int, List<int>>();
             dicGraphToControl.Add(graphs[outfit.Value], this);
@@ -796,7 +797,6 @@ namespace AmazingNewAccessoryLogic
             return node;
         }
 
-
         #endregion
         /// <summary>
         /// Adds a ouput node for an accessory slot 
@@ -811,11 +811,12 @@ namespace AmazingNewAccessoryLogic
             {
                 if (activeSlots.ContainsKey(outfit.Value) && activeSlots[outfit.Value].Contains(slot)) return null;
                 activeSlots[outfit.Value].Add(slot);
-                LogicFlowOutput output = new LogicFlowOutput_Action((value) => setAccessoryState(slot, value), graphs[outfit.Value], key: 1000000 + slot) { label = name ?? $"Slot {slot + 1}", toolTipText = $"Slot {slot + 1}" };
-                output.setPosition(new Vector2(
-                    graphs[outfit.Value].getSize().x - 80,
-                    graphs[outfit.Value].getSize().y - 50 * (activeSlots[outfit.Value].Count))
-                );
+                var graph = graphs[outfit.Value];
+                LogicFlowOutput output = new LogicFlowOutput_Action((value) => setAccessoryState(slot, value), graph, key: 1000000 + slot) { label = name ?? $"Slot {slot + 1}", toolTipText = $"Slot {slot + 1}" };
+                output.setPosition(OutputPos(activeSlots[outfit.Value].Count));
+                if (graph.getSize().x < output.getPosition().x + 80f) {
+                    graph.setSize(new Vector2(output.getPosition().x + 80f, graph.getSize().y));
+                }
                 output.nodeDeletedEvent += (object sender, NodeDeletedEventArgs e) =>
                 {
                     AmazingNewAccessoryLogic.Logger.LogInfo($"Removed Slot {slot} on outfit {outfit.Value}");
@@ -1000,6 +1001,18 @@ namespace AmazingNewAccessoryLogic
             base.Update();
         }
 
+        internal static int OutputCol(int num) {
+            return (num + (num / 35) - 1) / 18;
+        }
+
+        internal static Vector2 OutputPos(int num) {
+            int col = OutputCol(num);
+            return new Vector2(
+                defaultGraphSize.x - 80f + col * 100f,
+                defaultGraphSize.y - 50f * (num % 35 - num % 35 / 19 * 18 + (num % 35 == 0 ? 17 : 0)) - col % 2 * 25
+            );
+        }
+
         #region OnGUI
         private Rect normalInputRect = new Rect(0, 0, 130, 20);
 
@@ -1142,26 +1155,32 @@ namespace AmazingNewAccessoryLogic
                                     numBtns++;
                                     var accBoxSize = new Vector2(acsRect.size.x - 18f, 70);
                                     GUILayout.Space(2);
-                                    GUILayout.Box("", solidSkin.window, new[] { GUILayout.Width(accBoxSize.x), GUILayout.Height(accBoxSize.y) });
-                                    GUILayout.Space(-(accBoxSize.y + 3));
-                                    GUILayout.BeginVertical();
-                                    {
-                                        GUILayout.BeginHorizontal();
+                                    float yStart = (numBtns - 1) * (accBoxSize.y + 2f);
+                                    // Only draw visible buttons to save on some garbage
+                                    if (yStart + accBoxSize.y > simpleWindowScrollPosAcs.y && yStart < simpleWindowScrollPosAcs.y + acsRect.height) {
+                                        GUILayout.Box("", solidSkin.window, new[] { GUILayout.Width(accBoxSize.x), GUILayout.Height(accBoxSize.y) });
+                                        GUILayout.Space(-(accBoxSize.y + 3));
+                                        GUILayout.BeginVertical();
                                         {
-                                            GUILayout.Space(5);
-                                            GUILayout.Label(ChaControl.infoAccessory[i].Name);
-                                            GUILayout.FlexibleSpace();
-                                            GUILayout.Label($"Slot {i + 1}");
-                                            GUILayout.Space(3);
+                                            GUILayout.BeginHorizontal();
+                                            {
+                                                GUILayout.Space(5);
+                                                GUILayout.Label(ChaControl.infoAccessory[i].Name);
+                                                GUILayout.FlexibleSpace();
+                                                GUILayout.Label($"Slot {i + 1}");
+                                                GUILayout.Space(3);
+                                            }
+                                            GUILayout.EndHorizontal();
+                                            var offset = new Vector2(
+                                                15f,
+                                                numBtns * (accBoxSize.y + 2f) + 35f - simpleWindowScrollPosAcs.y
+                                            );
+                                            DoBindings(i, offset);
                                         }
-                                        GUILayout.EndHorizontal();
-                                        var offset = new Vector2(
-                                            15f,
-                                            numBtns * (accBoxSize.y + 2f) + 35f - simpleWindowScrollPosAcs.y
-                                        );
-                                        DoBindings(i, offset);
+                                        GUILayout.EndVertical();
+                                    } else {
+                                        GUILayout.Space(accBoxSize.y - 2f);
                                     }
-                                    GUILayout.EndVertical();
                                     GUILayout.Space(2);
                                 }
                                 GUILayout.Space(5);
@@ -1198,118 +1217,123 @@ namespace AmazingNewAccessoryLogic
                                 int numChildren = grpChildren != null ? grpChildren.Count + 1 : 1;
                                 sumChildren += numChildren;
                                 var grpBoxSize = new Vector2(grpRect.size.x - 18f, baseBoxHeight + numChildren * childHeight - 4f);
-                                GUILayout.Box("", solidSkin.window, new[] { GUILayout.Width(grpBoxSize.x), GUILayout.Height(grpBoxSize.y) });
-                                GUILayout.Space(-(grpBoxSize.y + 4));
-                                GUILayout.BeginVertical();
-                                {
-                                    GUILayout.BeginHorizontal();
-                                    { // Group title
-                                        GUILayout.Space(5);
-                                        GUILayout.Label(node.getName());
-                                        GUILayout.FlexibleSpace();
-                                        if (GUILayout.Button("Rename")) {
-                                            renamedNode = node.index;
-                                            renameRect = new Rect(Event.current.mousePosition - new Vector2(120, 20) + grpRect.position + simpleWindowRect.position, new Vector2(240, 40));
-                                            renameName = node.getName();
-                                        }
-                                        if (GUILayout.Button("X")) {
-                                            data.RemoveGroup(node.index);
-                                            lfg.RemoveNode(node.index);
-                                        }
-                                        GUILayout.Space(-2);
-                                    }
-                                    GUILayout.EndHorizontal();
-                                    { // Bindings
-                                        var offset = new Vector2(
-                                            simpleWindowRect.width / 2f + 8f,
-                                            (i + 1) * baseBoxHeight + (sumChildren - numChildren) * (childHeight) + baseHeight - simpleWindowScrollPosGrp.y - 45f
-                                        );
-                                        DoBindings(node.index, offset);
-                                    }
-                                    GUILayout.Space(3);
-                                    GUILayout.BeginHorizontal();
-                                    { // State selection
-                                        GUILayout.Space(5);
-                                        GUILayout.BeginVertical();
-                                        {
-                                            GUILayout.Space(-6);
-                                            GUILayout.Label($"Group state: {node.state}");
-                                            GUILayout.Space(-2);
-                                            GUILayout.Label($"Min: {node.Min}, Max: {node.Max}");
-                                        }
-                                        GUILayout.EndVertical();
-                                        GUILayout.BeginVertical();
-                                        {
-                                            GUILayout.Space(-6);
-                                            GUILayout.Label("Select");
-                                            GUILayout.Space(-2);
-                                            GUILayout.BeginHorizontal();
-                                            {
-                                                if (GUILayout.Button("Prev")) {
-                                                    node.state--;
-                                                }
-                                                if (GUILayout.Button("Next")) {
-                                                    node.state++;
-                                                }
+                                float yStart = baseHeight + i * baseBoxHeight + (sumChildren - numChildren) * childHeight;
+                                if (yStart + grpBoxSize.y > simpleWindowScrollPosGrp.y && yStart <  simpleWindowScrollPosGrp.y + grpRect.height) {
+                                    GUILayout.Box("", solidSkin.window, new[] { GUILayout.Width(grpBoxSize.x), GUILayout.Height(grpBoxSize.y) });
+                                    GUILayout.Space(-(grpBoxSize.y + 4));
+                                    GUILayout.BeginVertical();
+                                    {
+                                        GUILayout.BeginHorizontal();
+                                        { // Group title
+                                            GUILayout.Space(5);
+                                            GUILayout.Label(node.getName());
+                                            GUILayout.FlexibleSpace();
+                                            if (GUILayout.Button("Rename")) {
+                                                renamedNode = node.index;
+                                                renameRect = new Rect(Event.current.mousePosition - new Vector2(120, 20) + grpRect.position + simpleWindowRect.position, new Vector2(240, 40));
+                                                renameName = node.getName();
                                             }
-                                            GUILayout.EndHorizontal();
+                                            if (GUILayout.Button("X")) {
+                                                data.RemoveGroup(node.index);
+                                                lfg.RemoveNode(node.index);
+                                            }
+                                            GUILayout.Space(-2);
                                         }
-                                        GUILayout.EndVertical();
-                                        GUILayout.Space(5);
-                                    }
-                                    GUILayout.EndHorizontal();
-                                    { // Child management
-                                        if (hasChildren) {
-                                            grpChildren.Sort();
-                                            var leftText = new GUIStyle(GUI.skin.label) {
-                                                wordWrap = false,
-                                                alignment = TextAnchor.MiddleLeft,
-                                            };
-                                            foreach (var child in grpChildren) {
+                                        GUILayout.EndHorizontal();
+                                        { // Bindings
+                                            var offset = new Vector2(
+                                                simpleWindowRect.width / 2f + 8f,
+                                                (i + 1) * baseBoxHeight + (sumChildren - numChildren) * (childHeight) + baseHeight - simpleWindowScrollPosGrp.y - 45f
+                                            );
+                                            DoBindings(node.index, offset);
+                                        }
+                                        GUILayout.Space(3);
+                                        GUILayout.BeginHorizontal();
+                                        { // State selection
+                                            GUILayout.Space(5);
+                                            GUILayout.BeginVertical();
+                                            {
+                                                GUILayout.Space(-6);
+                                                GUILayout.Label($"Group state: {node.state}");
+                                                GUILayout.Space(-2);
+                                                GUILayout.Label($"Min: {node.Min}, Max: {node.Max}");
+                                            }
+                                            GUILayout.EndVertical();
+                                            GUILayout.BeginVertical();
+                                            {
+                                                GUILayout.Space(-6);
+                                                GUILayout.Label("Select");
+                                                GUILayout.Space(-2);
                                                 GUILayout.BeginHorizontal();
                                                 {
-                                                    GUILayout.Space(5);
-                                                    GUILayout.Label($"Slot {child + 1} - {ChaControl.infoAccessory[child].Name}", leftText);
-                                                    GUILayout.FlexibleSpace();
-                                                    bool isOn = node.controlledNodes.TryGetValue(node.state, out var stateSet) && stateSet.Contains(getOutput(child));
-                                                    if (GUILayout.Button(isOn ? "On" : "Off", isOn ? bindStateStyleOn : bindStateStyleOff)) {
-                                                        if (isOn) {
-                                                            node.removeActiveNode(getOutput(child));
-                                                        } else {
-                                                            node.addActiveNode(child);
-                                                        }
+                                                    if (GUILayout.Button("Prev")) {
+                                                        node.state--;
                                                     }
-                                                    if (GUILayout.Button("X")) {
-                                                        data.RemoveChild(node.index, child);
-                                                        // To finish the group
-                                                        GUILayout.EndHorizontal();
-                                                        break;
+                                                    if (GUILayout.Button("Next")) {
+                                                        node.state++;
                                                     }
-                                                    GUILayout.Space(5);
                                                 }
                                                 GUILayout.EndHorizontal();
                                             }
-                                        }
-                                        GUILayout.BeginHorizontal();
-                                        {
-                                            GUILayout.Space(5);
-                                            if (!hasChildren) GUILayout.Label("No Children!");
-                                            GUILayout.FlexibleSpace();
-                                            if (GUILayout.Button(" + ")) {
-                                                grpBeingAddedTo = node.index;
-                                                grpAddRect = new Rect(
-                                                    simpleWindowRect.x + simpleWindowRect.width - 335f,
-                                                    simpleWindowRect.y + baseHeight + sumChildren * (childHeight) + baseBoxHeight * (i + 1) - simpleWindowScrollPosGrp.y,
-                                                    300f,
-                                                    240f
-                                                );
-                                            }
+                                            GUILayout.EndVertical();
                                             GUILayout.Space(5);
                                         }
                                         GUILayout.EndHorizontal();
+                                        { // Child management
+                                            if (hasChildren) {
+                                                grpChildren.Sort();
+                                                var leftText = new GUIStyle(GUI.skin.label) {
+                                                    wordWrap = false,
+                                                    alignment = TextAnchor.MiddleLeft,
+                                                };
+                                                foreach (var child in grpChildren) {
+                                                    GUILayout.BeginHorizontal();
+                                                    {
+                                                        GUILayout.Space(5);
+                                                        GUILayout.Label($"Slot {child + 1} - {ChaControl.infoAccessory[child].Name}", leftText, GUILayout.MaxWidth(grpBoxSize.x - 75));
+                                                        GUILayout.FlexibleSpace();
+                                                        bool isOn = node.controlledNodes.TryGetValue(node.state, out var stateSet) && stateSet.Contains(getOutput(child));
+                                                        if (GUILayout.Button(isOn ? "On" : "Off", isOn ? bindStateStyleOn : bindStateStyleOff)) {
+                                                            if (isOn) {
+                                                                node.removeActiveNode(getOutput(child));
+                                                            } else {
+                                                                node.addActiveNode(child);
+                                                            }
+                                                        }
+                                                        if (GUILayout.Button("X")) {
+                                                            data.RemoveChild(node.index, child);
+                                                            // To finish the group
+                                                            GUILayout.EndHorizontal();
+                                                            break;
+                                                        }
+                                                        GUILayout.Space(5);
+                                                    }
+                                                    GUILayout.EndHorizontal();
+                                                }
+                                            }
+                                            GUILayout.BeginHorizontal();
+                                            {
+                                                GUILayout.Space(5);
+                                                if (!hasChildren) GUILayout.Label("No Children!");
+                                                GUILayout.FlexibleSpace();
+                                                if (GUILayout.Button(" + ")) {
+                                                    grpBeingAddedTo = node.index;
+                                                    grpAddRect = new Rect(
+                                                        simpleWindowRect.x + simpleWindowRect.width - 335f,
+                                                        simpleWindowRect.y + baseHeight + sumChildren * (childHeight) + baseBoxHeight * (i + 1) - simpleWindowScrollPosGrp.y,
+                                                        300f,
+                                                        240f
+                                                    );
+                                                }
+                                                GUILayout.Space(5);
+                                            }
+                                            GUILayout.EndHorizontal();
+                                        }
                                     }
+                                    GUILayout.EndVertical();
+                                } else {
+                                    GUILayout.Space(grpBoxSize.y - 1f);
                                 }
-                                GUILayout.EndVertical();
                                 GUILayout.Space(5);
                             }
                         }

@@ -1,13 +1,10 @@
-﻿using ActionGame.Point;
-using Illusion.Extensions;
-using LogicFlows;
+﻿using LogicFlows;
 using MessagePack;
-using System;
-using System.Collections;
-using System.Collections.Generic;
 using System.Linq;
-using System.Text;
 using UnityEngine;
+using System.Collections;
+using Illusion.Extensions;
+using System.Collections.Generic;
 
 namespace AmazingNewAccessoryLogic {
     public class GraphData {
@@ -19,10 +16,8 @@ namespace AmazingNewAccessoryLogic {
                 return _advanced;
             }
             set {
-                if (!value && _advanced) {
-                    MakeGraph(true);
-                }
                 _advanced = value;
+                MakeGraph(true);
             }
         }
 
@@ -203,11 +198,11 @@ namespace AmazingNewAccessoryLogic {
             // Only make the graph in simple mode
             if (advanced) return;
 
-            graph.isLoading = true;
-
             // Get control and current outfit
-            var ctrl = AnalCharaController.dicGraphToControl[graph];
+            if (!AnalCharaController.dicGraphToControl.TryGetValue(graph, out var ctrl)) return;
             int outfit = ctrl.graphs.Keys.FirstOrDefault(x => ctrl.graphs[x] == graph);
+
+            graph.isLoading = true;
 
             // Get all node indices whose outputs are being used
             Dictionary<int, int> allSources = new Dictionary<int, int>();
@@ -226,20 +221,31 @@ namespace AmazingNewAccessoryLogic {
             // Clear graph of everything we don't want to reuse
             var allGroupChildren = GetAllChildIndices();
             HashSet<int> toRemove = new HashSet<int>();
-            foreach (var node in graph.nodes) {
-                if (!all && !changedNodes.Contains(node.Value.index < 0 ? node.Value.index : node.Value.index - 1000000)) continue;
-                if (allGroupChildren.Contains(node.Value.index)) continue;
-                LogicFlowNode current = null;
-                List<LogicFlowNode> toCheck = new List<LogicFlowNode> { node.Value };
-                while (toCheck.Count > 0) {
-                    current = toCheck.Pop();
-                    foreach (int? idx in current.inputs) {
-                        if (idx == null) continue;
-                        var nowNode = graph.getNodeAt(idx.Value);
-                        if (nowNode is LogicFlowInput || nowNode is LogicFlowNode_GRP) continue;
-                        if (allSources.TryGetValue(nowNode.index, out int usersNum) && usersNum < 2) {
-                            toRemove.Add(nowNode.index);
-                            toCheck.Add(nowNode);
+            if (all) {
+                foreach (var node in graph.nodes.Values) {
+                    if (!(node is LogicFlowNode_GRP) && !(node is LogicFlowInput)) {
+                        toRemove.Add(node.index);
+                    } else if (node is LogicFlowNode_GRP) {
+                        node.inputs[0] = null;
+                        node.setPosition(AnalCharaController.defaultGraphSize / 2 - node.getSize() / 2);
+                    }
+                }
+            } else {
+                foreach (var node in graph.nodes) {
+                    if (!changedNodes.Contains(node.Value.index < 0 ? node.Value.index : node.Value.index - 1000000)) continue;
+                    if (allGroupChildren.Contains(node.Value.index)) continue;
+                    LogicFlowNode current = null;
+                    List<LogicFlowNode> toCheck = new List<LogicFlowNode> { node.Value };
+                    while (toCheck.Count > 0) {
+                        current = toCheck.Pop();
+                        foreach (int? idx in current.inputs) {
+                            if (idx == null) continue;
+                            var nowNode = graph.getNodeAt(idx.Value);
+                            if (nowNode is LogicFlowInput || nowNode is LogicFlowNode_GRP) continue;
+                            if (allSources.TryGetValue(nowNode.index, out int usersNum) && usersNum < 2) {
+                                toRemove.Add(nowNode.index);
+                                toCheck.Add(nowNode);
+                            }
                         }
                     }
                 }
@@ -253,10 +259,11 @@ namespace AmazingNewAccessoryLogic {
 
             // Connect outputs to group nodes
             foreach (var kvp in groupChildren) {
-                if (!all && !changedNodes.Contains(kvp.Key)) continue;
+                if (!(all || changedNodes.Contains(kvp.Key))) continue;
                 var grp = (LogicFlowNode_GRP)graph.getNodeAt(kvp.Key);
                 foreach (var slot in kvp.Value) {
-                    var node = ctrl.getOutput(slot, outfit);
+                    LogicFlowOutput node = ctrl.getOutput(slot, outfit);
+                    if (node == null) node = ctrl.addOutput(slot, outfit);
                     if (node.inputs[0] != kvp.Key) {
                         node.SetInput(kvp.Key, 0);
                     }
@@ -267,7 +274,7 @@ namespace AmazingNewAccessoryLogic {
             foreach (var kvp in bindings) {
                 // Skip unbound, unchanged (if not updating all), and in-group accessories
                 if (allGroupChildren.Contains(kvp.Key)) continue;
-                if (!all && !changedNodes.Contains(kvp.Key)) continue;
+                if (!(all || changedNodes.Contains(kvp.Key))) continue;
                 if (kvp.Value == null) {
                     var node = ctrl.getOutput(kvp.Key, outfit);
                     if (node != null) {
@@ -421,39 +428,48 @@ namespace AmazingNewAccessoryLogic {
             }
 
             // Prettify layout
-            int numOutputs = 1;
-            float perNodeOffset = 20f;
+            int numOutputs = 0;
+            float perNodeOffset = 35f;
             var allChildren = GetAllChildIndices();
             foreach (var kvp in groupChildren) {
-                Vector2 pos = Vector2.zero;
+                float y = 0f;
                 foreach (int child in kvp.Value) {
-                    var output = ctrl.getOutput(child, outfit);
-                    output.setPosition(OutputPos(numOutputs));
-                    pos += output.getPosition();
                     numOutputs++;
+                    var output = ctrl.getOutput(child, outfit);
+                    output.setPosition(AnalCharaController.OutputPos(numOutputs));
+                    y += output.getPosition().y;
                 }
                 var grp = graph.getNodeAt(kvp.Key);
                 if (kvp.Value.Count > 0) {
-                    grp.setPosition(pos / kvp.Value.Count - new Vector2(grp.getSize().x + perNodeOffset + 10f, 0));
+                    float newY = y / kvp.Value.Count;
+                    float newX = AnalCharaController.defaultGraphSize.x - 80f - perNodeOffset - grp.getSize().x;
+                    grp.setPosition(new Vector2(newX, newY));
                 }
                 SetChainPos(grp);
             }
             foreach (var slot in bindings) {
                 if (slot.Key > -1 && slot.Value != null && !allChildren.Contains(slot.Key)) {
+                    numOutputs++;
                     var output = ctrl.getOutput(slot.Key, outfit);
                     if (output == null) continue;
-                    output.setPosition(OutputPos(numOutputs));
+                    output.setPosition(AnalCharaController.OutputPos(numOutputs));
                     SetChainPos(output);
-                    numOutputs++;
                 }
             }
-            Vector2 OutputPos(int num) => new Vector2(
-                graph.getSize().x - 80f,
-                graph.getSize().y - 50f * num
-            );
+
+            // Set graph size to encompass all outputs
+            graph.setSize(new Vector2(
+                AnalCharaController.defaultGraphSize.x + AnalCharaController.OutputCol(numOutputs) * 100f,
+                AnalCharaController.defaultGraphSize.y
+            ));
+
+            // Helper function
             void SetChainPos(LogicFlowNode root) {
                 if (root == null) return;
                 Vector2 previous = root.getPosition();
+                if (previous.x > AnalCharaController.defaultGraphSize.x - 80f) {
+                    previous.x = AnalCharaController.defaultGraphSize.x - 80f;
+                }
                 List<LogicFlowNode> toCheck = new List<LogicFlowNode> { root.inputAt(0) };
                 while (toCheck.Count > 0) {
                     var current = toCheck.Pop();
