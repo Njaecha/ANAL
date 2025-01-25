@@ -241,8 +241,8 @@ namespace AmazingNewAccessoryLogic
                     if (sNode.data?.Count > 0) node.SetInput(sNode.data[0], 0);
                     if (sNode.data3 != null) {
                         foreach (var kvp in sNode.data3) {
-                            var hashEntry = new HashSet<LogicFlowNode>();
-                            foreach (var idx in kvp.Value) hashEntry.Add(graphs[outfit].getNodeAt(idx));
+                            var hashEntry = new HashSet<int>();
+                            foreach (var idx in kvp.Value) hashEntry.Add(idx);
                             (node as LogicFlowNode_GRP).controlledNodes.Add(kvp.Key, hashEntry);
                         }
                     }
@@ -1292,7 +1292,7 @@ namespace AmazingNewAccessoryLogic
                                                         GUILayout.Space(5);
                                                         GUILayout.Label($"Slot {child + 1} - {ChaControl.infoAccessory[child].Name}", leftText, GUILayout.MaxWidth(grpBoxSize.x - 75));
                                                         GUILayout.FlexibleSpace();
-                                                        bool isOn = node.controlledNodes.TryGetValue(node.state, out var stateSet) && stateSet.Contains(getOutput(child));
+                                                        bool isOn = node.controlledNodes.TryGetValue(node.state, out var stateSet) && stateSet.Contains(child + 1000000);
                                                         if (GUILayout.Button(isOn ? "On" : "Off", isOn ? bindStateStyleOn : bindStateStyleOff)) {
                                                             if (isOn) {
                                                                 node.removeActiveNode(getOutput(child));

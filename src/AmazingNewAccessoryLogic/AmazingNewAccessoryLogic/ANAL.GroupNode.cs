@@ -22,7 +22,7 @@ namespace AmazingNewAccessoryLogic {
         public int Max { get; private set; }
 
         // dic<state, set<enabledThingForThisState>>
-        internal Dictionary<int, HashSet<LogicFlowNode>> controlledNodes = new Dictionary<int, HashSet<LogicFlowNode>>();
+        internal Dictionary<int, HashSet<int>> controlledNodes = new Dictionary<int, HashSet<int>>();
 
         public LogicFlowNode_GRP(LogicFlowGraph parentGraph, int? key = null, string name = null) : base(new int?[1], parentGraph, key) {
             setName(name ?? "GRP");
@@ -55,8 +55,8 @@ namespace AmazingNewAccessoryLogic {
 
         public void addActiveNode(LogicFlowNode node, int? state = null) {
             int stateToAddTo = state.GetValueOrDefault(this.state);
-            if (!controlledNodes.ContainsKey(stateToAddTo)) controlledNodes[stateToAddTo] = new HashSet<LogicFlowNode>();
-            controlledNodes[stateToAddTo].Add(node);
+            if (!controlledNodes.ContainsKey(stateToAddTo)) controlledNodes[stateToAddTo] = new HashSet<int>();
+            controlledNodes[stateToAddTo].Add(node.index);
             calcTooltip();
         }
 
@@ -64,7 +64,7 @@ namespace AmazingNewAccessoryLogic {
             if (node == null) return false;
             int stateToRemoveFrom = state.GetValueOrDefault(this.state);
             if (!controlledNodes.ContainsKey(stateToRemoveFrom)) return false;
-            bool result = controlledNodes[stateToRemoveFrom].Remove(node);
+            bool result = controlledNodes[stateToRemoveFrom].Remove(node.index);
             calcTooltip();
             return result;
         }
@@ -95,7 +95,7 @@ namespace AmazingNewAccessoryLogic {
                 return false;
             }
 
-            bool result = controlledNodes.TryGetValue(state, out var setNodes) && setNodes.Contains(requestor);
+            bool result = controlledNodes.TryGetValue(state, out var setNodes) && setNodes.Contains(requestor.index);
             requestor = null;
             return result;
         }
@@ -105,7 +105,7 @@ namespace AmazingNewAccessoryLogic {
                 return false;
             }
             int stateToQuery = __state.GetValueOrDefault(state);
-            return controlledNodes.TryGetValue(stateToQuery, out var setNodes) && setNodes.Contains(node);
+            return controlledNodes.TryGetValue(stateToQuery, out var setNodes) && setNodes.Contains(node.index);
         }
 
         protected override Rect initRect() {
@@ -116,11 +116,8 @@ namespace AmazingNewAccessoryLogic {
             LogicFlowNode_GRP clonedGroup = new LogicFlowNode_GRP(parentGraph) {
                 label = label,
                 toolTipText = toolTipText,
-                controlledNodes = new Dictionary<int, HashSet<LogicFlowNode>>(controlledNodes),
             };
-            foreach (var key in controlledNodes.Keys) {
-                clonedGroup.controlledNodes[key] = new HashSet<LogicFlowNode>(controlledNodes[key]);
-            }
+            clonedGroup.setName(clonedGroup.getName());
             clonedGroup.setPositionUI(rect.position + new Vector2(20f, 20f));
         }
     }

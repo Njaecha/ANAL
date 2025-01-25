@@ -142,12 +142,12 @@ namespace AmazingNewAccessoryLogic
                         x.Key,
                         x.Value
                             .Where(y =>
-                                y.inputs.Any(z =>
+                                graph.getNodeAt(y) != null &&
+                                graph.getNodeAt(y).inputs.Any(z =>
                                     z != null &&
                                     graph.getNodeAt(z.Value) == grp
                                 )
                             )
-                            .Select(y => y.index)
                             .ToList()
                     )
                 )
