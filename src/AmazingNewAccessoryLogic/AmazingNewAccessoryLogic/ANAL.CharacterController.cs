@@ -12,7 +12,7 @@ using System.Collections.Generic;
 
 namespace AmazingNewAccessoryLogic
 {
-    class AnalCharaController : CharaCustomFunctionController
+    public class AnalCharaController : CharaCustomFunctionController
     {
         public const int normalInputWindowID = 2233500;
         public const int advancedInputWindowID = 2233511;
@@ -21,6 +21,7 @@ namespace AmazingNewAccessoryLogic
         public const int simpleModeWindowID = 2233544;
         public const int simpleModeAccBindDropID = 2233555;
         public const int simpleModeGroupAddID = 2233566;
+        public const int confirmWindowID = 2233577;
 
         public static readonly Vector2 defaultGraphSize = new Vector2(600, 900);
         public static readonly byte saveVersion = 2;
@@ -29,7 +30,6 @@ namespace AmazingNewAccessoryLogic
 
         internal static Dictionary<LogicFlowGraph, Dictionary<int, List<object>>> serialisationData = new Dictionary<LogicFlowGraph, Dictionary<int, List<object>>>();
 
-        internal static Dictionary<LogicFlowGraph, AnalCharaController> dicGraphToControl = new Dictionary<LogicFlowGraph, AnalCharaController>();
         private Dictionary<LogicFlowGraph, GraphData> graphData = new Dictionary<LogicFlowGraph, GraphData>();
         internal Dictionary<int, LogicFlowGraph> graphs = new Dictionary<int, LogicFlowGraph>();
         internal Dictionary<int, List<int>> activeSlots = new Dictionary<int, List<int>>();
@@ -37,11 +37,14 @@ namespace AmazingNewAccessoryLogic
         internal bool displayGraph = false;
         private static Material mat = new Material(Shader.Find("Hidden/Internal-Colored"));
 
+        PluginData loadedCardData = null;
+        PluginData loadedCoordData = null;
+
         //render bodge 
         private RenderTexture rTex;
         private Camera rCam;
 
-        #region GameEvetns
+        #region GameEvents
         protected override void OnCardBeingSaved(GameMode currentGameMode)
         {
             if (graphs.Count == 0) return;
@@ -62,17 +65,16 @@ namespace AmazingNewAccessoryLogic
 
         protected override void OnReload(GameMode currentGameMode, bool maintainState)
         {
-            base.OnReload(currentGameMode, maintainState);
-
             graphData.Clear();
             graphs.Clear();
             activeSlots.Clear();
 
-            PluginData data = GetExtendedData();
+            PluginData data = maintainState ? loadedCardData : GetExtendedData();
             if (data == null)
             {
                 return;
             }
+            loadedCardData = data;
 
             byte version = 0;
             if (data.data.TryGetValue("Version", out var versionS) && versionS != null)
@@ -96,6 +98,8 @@ namespace AmazingNewAccessoryLogic
                     lfg?.ForceUpdate();
                 }
             }
+
+            base.OnReload(currentGameMode, maintainState);
         }
 
         protected override void OnCoordinateBeingSaved(ChaFileCoordinate coordinate)
@@ -117,7 +121,7 @@ namespace AmazingNewAccessoryLogic
         {
             base.OnCoordinateBeingLoaded(coordinate, maintainState);
             // Maker partial coordinate load fix
-            if (KKAPI.Maker.MakerAPI.InsideAndLoaded)
+            if (MakerAPI.InsideAndLoaded)
             {
                 // return if no accessories are being loaded
                 if (GameObject.Find("cosFileControl")?.GetComponentInChildren<ChaCustom.CustomFileWindow>()?.tglCoordeLoadAcs.isOn == false) return;
@@ -129,11 +133,12 @@ namespace AmazingNewAccessoryLogic
             }
             activeSlots.Remove(coordIdx);
 
-            PluginData data = GetCoordinateExtendedData(coordinate);
+            PluginData data = maintainState ? loadedCoordData : GetCoordinateExtendedData(coordinate);
             if (data == null)
             {
                 return;
             }
+            loadedCoordData = data;
 
             byte version = 0;
             if (data.data.TryGetValue("Version", out var versionS) && versionS != null)
@@ -161,39 +166,117 @@ namespace AmazingNewAccessoryLogic
 
         internal void AccessoryTransferred(int sourceSlot, int destinationSlot)
         {
-            if (!activeSlots.ContainsKey(ChaControl.fileStatus.coordinateType)) return;
-            if (activeSlots[ChaControl.fileStatus.coordinateType].Contains(sourceSlot))
-            {
-                LogicFlowOutput destNode = (LogicFlowOutput)lfg.getNodeAt(1000000 + destinationSlot);
-                if (destNode == null) destNode = addOutput(destinationSlot);
-                LogicFlowNode sourceNode = (LogicFlowOutput)lfg.getNodeAt(1000000 + sourceSlot);
-                destNode.SetInput(sourceNode.inputAt(0).index, 0);
+            if (AmazingNewAccessoryLogic.Debug.Value) AmazingNewAccessoryLogic.Logger.LogInfo($"Transfering acc {sourceSlot + 1} to {destinationSlot + 1}...");
+
+            // Check if there's anything to do
+            int outfit = ChaControl.fileStatus.coordinateType;
+            if (lfg == null || !activeSlots.ContainsKey(outfit)) return;
+
+            // Clear the destination node if we have any data of it
+            LogicFlowOutput destNode = getOutput(destinationSlot, outfit);
+            var data = graphData[lfg];
+            if (destNode != null) {
+                if (AmazingNewAccessoryLogic.Debug.Value) AmazingNewAccessoryLogic.Logger.LogInfo($"Removing old data...");
+                data.PurgeNode(destNode);
+                activeSlots[outfit].Remove(destinationSlot);
+                lfg.RemoveNode(destNode.index);
+            }
+
+            // Copy any sensible data if the source node exists
+            LogicFlowOutput sourceNode = getOutput(sourceSlot);
+            if (sourceNode != null) {
+                if (AmazingNewAccessoryLogic.Debug.Value) AmazingNewAccessoryLogic.Logger.LogInfo($"Copying new data...");
+                destNode = addOutput(destinationSlot, outfit);
+                if (AmazingNewAccessoryLogic.Debug.Value && destNode == null) AmazingNewAccessoryLogic.Logger.LogInfo($"Could not create new output!");
+                if (sourceNode.inputAt(0) != null) {
+                    destNode.SetInput(sourceNode.inputAt(0).index, 0);
+                }
+                GraphData.CopyAccData(sourceSlot, data, destinationSlot);
             }
         }
 
-        internal void AccessoriesCopied(int sourceOutift, int destinationOutfit, IEnumerable<int> slots)
+        internal void AccessoryKindChanged(int slot, bool forceRemove = false) {
+            if (lfg == null) return;
+
+            if (AmazingNewAccessoryLogic.Debug.Value) AmazingNewAccessoryLogic.Logger.LogInfo($"Acc in slot {slot + 1} changed kind!");
+            if (forceRemove || AccessoriesApi.GetCvsAccessory(slot).ddAcsType.value == 0) {
+                if (AmazingNewAccessoryLogic.Debug.Value) AmazingNewAccessoryLogic.Logger.LogInfo($"Removing...");
+                int outfit = ChaControl.fileStatus.coordinateType;
+                graphData[lfg].PurgeNode(getOutput(slot));
+                if (activeSlots[outfit].Contains(slot)) {
+                    lfg.RemoveNode(slot + 1000000);
+                    activeSlots[outfit].Remove(slot);
+                }
+            }
+        }
+
+        internal void AccessoriesCopied(int sourceOutfit, int destinationOutfit, IEnumerable<int> slots)
         {
-            if (!graphs.ContainsKey(sourceOutift)) return;
+            // Return only if data doesn't exist on either side of the operation
+            if (!graphs.ContainsKey(sourceOutfit) && !graphs.ContainsKey(destinationOutfit)) return;
+
+            // Create destination graph if it doesn't exist
             if (!graphs.ContainsKey(destinationOutfit))
             {
                 createGraph(destinationOutfit);
             }
-            graphs[destinationOutfit].isLoading = true;
+
+            if (AmazingNewAccessoryLogic.Debug.Value) AmazingNewAccessoryLogic.Logger.LogInfo($"Copying acc from outfit {sourceOutfit} to {destinationOutfit}...");
+
+            // Create variables
+            var srcGraph = graphs[sourceOutfit];
+            var srcData = srcGraph == null ? null : graphData[srcGraph];
+            var dstGraph = graphs[destinationOutfit];
+            var dstData = graphData[dstGraph];
+
+            // Copy data and nodes
+            dstGraph.isLoading = true;
             foreach(int slot in slots)
             {
-                if (!activeSlots[sourceOutift].Contains(slot)) continue;
-                LogicFlowOutput sOutput = (LogicFlowOutput)graphs[sourceOutift].getNodeAt(1000000 + slot);
+                int idxSlot = slot + 1000000;
+
+                // Destroy any existing data on the destination outfit for this slot
+                if (dstGraph.getNodeAt(idxSlot) != null) {
+                    if (AmazingNewAccessoryLogic.Debug.Value) AmazingNewAccessoryLogic.Logger.LogInfo($"Removing old data...");
+                    dstData.PurgeNode(dstGraph.getNodeAt(idxSlot));
+                    dstGraph.RemoveNode(idxSlot);
+                }
+
+                // Copy over data if it exists
+                if (!activeSlots[sourceOutfit].Contains(slot)) continue;
+                if (AmazingNewAccessoryLogic.Debug.Value) AmazingNewAccessoryLogic.Logger.LogInfo($"Copying new data...");
+                LogicFlowOutput sOutput = (LogicFlowOutput)srcGraph.getNodeAt(idxSlot);
                 if (sOutput == null) continue;
                 List<int> iTree = sOutput.getInputTree();
-                LogicFlowOutput dOutput = (LogicFlowOutput)graphs[destinationOutfit].getNodeAt(1000000 + slot);
-                if (dOutput == null) deserialiseNode(saveVersion, destinationOutfit, SerialisedNode.Serialise(graphs[sourceOutift].getNodeAt(1000000 + slot), graphs[sourceOutift]));
+                deserialiseNode(saveVersion, destinationOutfit, SerialisedNode.Serialise(srcGraph.getNodeAt(idxSlot), srcGraph));
                 foreach(int index in iTree)
                 {
-                    LogicFlowNode node = graphs[destinationOutfit].getNodeAt(index);
-                    if (node == null) deserialiseNode(saveVersion, destinationOutfit, SerialisedNode.Serialise(graphs[sourceOutift].getNodeAt(index), graphs[sourceOutift]));
+                    LogicFlowNode node = dstGraph.getNodeAt(index);
+                    if (node == null) {
+                        var srcNode = srcGraph.getNodeAt(index);
+                        deserialiseNode(saveVersion, destinationOutfit, SerialisedNode.Serialise(srcNode, srcGraph));
+                        if (srcNode is LogicFlowNode_GRP) {
+                            var dstNode = (LogicFlowNode_GRP)dstGraph.getNodeAt(index);
+                            var toRemove = new List<int>();
+                            foreach (var set in dstNode.controlledNodes) {
+                                foreach (var idx in set.Value) {
+                                    if (dstGraph.getNodeAt(idx) == null) {
+                                        toRemove.Add(idx);
+                                    }
+                                }
+                                foreach (var idx in toRemove) {
+                                    dstNode.controlledNodes[set.Key].Remove(idx);
+                                }
+                                toRemove.Clear();
+                                dstNode.setName(dstNode.getName());
+                            }
+                        }
+                    }
                 }
+                GraphData.CopyAccData(slot, srcData, slot, dstData);
+                dstData.MakeGraph();
             }
-            graphs[destinationOutfit].isLoading = false;
+            dstGraph.isLoading = false;
         }
         #endregion
         #region Deserialisation
@@ -205,10 +288,9 @@ namespace AmazingNewAccessoryLogic
             newGraph.isLoading = true;
             foreach (SerialisedNode sNode in sGraph.nodes.Where(x => x.type != SerialisedNode.NodeType.Gate_GRP)) deserialiseNode(version, outfit, sNode);
             foreach (SerialisedNode sNode in sGraph.nodes.Where(x => x.type == SerialisedNode.NodeType.Gate_GRP)) deserialiseNode(version, outfit, sNode);
-            graphData.Add(graphs[outfit], new GraphData(newGraph, sGraphData));
+            graphData.Add(graphs[outfit], new GraphData(this, newGraph, sGraphData));
             if (sGraphData == null) graphData[graphs[outfit]].advanced = true;
             newGraph.isLoading = false;
-            dicGraphToControl.Add(newGraph, this);
         }
 
         private void deserialiseNode(int version, int outfit, SerialisedNode sNode)
@@ -216,30 +298,31 @@ namespace AmazingNewAccessoryLogic
             LogicFlowNode node = null;
             switch (sNode.type) {
                 case SerialisedNode.NodeType.Gate_NOT:
-                    node = new LogicFlowNode_NOT(graphs[outfit], key: sNode.index) { label = sNode.name ?? "NOT", toolTipText = "NOT" };
+                    node = new LogicFlowNode_NOT(graphs[outfit], sNode.index) { label = sNode.name ?? "NOT", toolTipText = "NOT" };
                     if (sNode.data?.Count > 0) node.SetInput(sNode.data[0], 0);
                     break;
                 case SerialisedNode.NodeType.Gate_AND:
-                    node = new LogicFlowNode_AND(graphs[outfit], key: sNode.index) { label = sNode.name ?? "AND", toolTipText = "AND" };
+                    node = new LogicFlowNode_AND(graphs[outfit], sNode.index) { label = sNode.name ?? "AND", toolTipText = "AND" };
                     for (int i = 0; i < sNode.data?.Count; i++) {
                         node.SetInput(sNode.data[i], i);
                     }
                     break;
                 case SerialisedNode.NodeType.Gate_OR:
-                    node = new LogicFlowNode_OR(graphs[outfit], key: sNode.index) { label = sNode.name ?? "OR", toolTipText = "OR" };
+                    node = new LogicFlowNode_OR(graphs[outfit], sNode.index) { label = sNode.name ?? "OR", toolTipText = "OR" };
                     for (int i = 0; i < sNode.data?.Count; i++) {
                         node.SetInput(sNode.data[i], i);
                     }
                     break;
                 case SerialisedNode.NodeType.Gate_XOR:
-                    node = new LogicFlowNode_XOR(graphs[outfit], key: sNode.index) { label = sNode.name ?? "XOR", toolTipText = "XOR" };
+                    node = new LogicFlowNode_XOR(graphs[outfit], sNode.index) { label = sNode.name ?? "XOR", toolTipText = "XOR" };
                     for (int i = 0; i < sNode.data?.Count; i++) {
                         node.SetInput(sNode.data[i], i);
                     }
                     break;
                 case SerialisedNode.NodeType.Gate_GRP:
-                    node = new LogicFlowNode_GRP(graphs[outfit], key: sNode.index, sNode.name);
+                    node = new LogicFlowNode_GRP(this, graphs[outfit], sNode.index, sNode.name);
                     if (sNode.data?.Count > 0) node.SetInput(sNode.data[0], 0);
+                    if (sNode.data2?.Count > 0) (node as LogicFlowNode_GRP).state = (int)sNode.data2[0];
                     if (sNode.data3 != null) {
                         foreach (var kvp in sNode.data3) {
                             var hashEntry = new HashSet<int>();
@@ -252,7 +335,7 @@ namespace AmazingNewAccessoryLogic
                     node = addInput((InputKey)sNode.index, sNode.position, outfit, sNode.name);
                     break;
                 case SerialisedNode.NodeType.Output:
-                    if (version == 1) {
+                    if (version == 1 && sNode.data.Count > 1) {
                         node = addOutput(sNode.data[0], outfit);
                         node.SetInput(sNode.data[1], 0);
                     } else {
@@ -314,10 +397,8 @@ namespace AmazingNewAccessoryLogic
             int coord = ChaControl.fileStatus.coordinateType;
             if (graphs.ContainsKey(coord)) {
                 graphs[coord] = g;
-                dicGraphToControl[g] = this;
             } else {
                 graphs.Add(coord, g);
-                dicGraphToControl.Add(g, this);
             }
             if (activeSlots.ContainsKey(coord)) activeSlots[coord].Clear();
             else activeSlots.Add(coord, new List<int>());
@@ -329,9 +410,8 @@ namespace AmazingNewAccessoryLogic
             if (graphs == null) graphs = new Dictionary<int, LogicFlowGraph>();
             if (graphData == null) graphData = new Dictionary<LogicFlowGraph, GraphData>();
             graphs[outfit.Value] = new LogicFlowGraph(new Rect(new Vector2(100,10), defaultGraphSize));
-            graphData[graphs[outfit.Value]] = new GraphData(graphs[outfit.Value]);
+            graphData[graphs[outfit.Value]] = new GraphData(this, graphs[outfit.Value]);
             if (activeSlots == null) activeSlots = new Dictionary<int, List<int>>();
-            dicGraphToControl.Add(graphs[outfit.Value], this);
             activeSlots[outfit.Value] = new List<int>();
             float topY = 900;
 
@@ -878,7 +958,7 @@ namespace AmazingNewAccessoryLogic
                         gate = new LogicFlowNode_XOR(graphs[outfit]) { label = name ?? "XOR", toolTipText = "XOR" };
                         break;
                     case 4:
-                        gate = new LogicFlowNode_GRP(graphs[outfit], name: name);
+                        gate = new LogicFlowNode_GRP(this, graphs[outfit], name: name);
                         break;
                 }
                 gate.setPosition(graphs[outfit].getSize()/2 - (gate.getSize() / 2));
@@ -1102,6 +1182,13 @@ namespace AmazingNewAccessoryLogic
         private Rect grpAddRect = new Rect();
         private Vector2 grpAddScrollPos = Vector2.zero;
 
+        private bool isConfirming = false;
+        private Rect confirmRect = new Rect();
+        private string confirmTitle = "";
+        private string confirmText = "";
+        private ConfirmFunc onConfirm = null;
+        private delegate void ConfirmFunc();
+
         void OnGUI()
         {
             if (lfg == null) return;
@@ -1122,8 +1209,31 @@ namespace AmazingNewAccessoryLogic
                     // Title row
                     GUILayout.BeginHorizontal();
                     {
+                        GUILayout.Space(-6);
+                        if (GUILayout.Button("Clear", bindStateStyleOff)) {
+                            confirmRect = new Rect(simpleWindowRect.position + Event.current.mousePosition - new Vector2(150, 30), new Vector2(300, 60));
+                            confirmTitle = "Clearing data";
+                            confirmText = "ALL simple mode data will be erased!";
+                            onConfirm = () => {
+                                var grpNodes = lfg.nodes.Values.ToList();
+                                foreach (var node in grpNodes) {
+                                    if (!(node is LogicFlowInput)) lfg.RemoveNode(node.index);
+                                }
+                                lfg.setSize(defaultGraphSize);
+                                graphData[lfg] = new GraphData(this, lfg);
+                            };
+                            isConfirming = true;
+                        }
                         GUILayout.FlexibleSpace();
-                        if (GUILayout.Button("Adv. Mode")) graphData[lfg].advanced = true;
+                        if (GUILayout.Button("Adv. Mode")) {
+                            confirmRect = new Rect(simpleWindowRect.position + Event.current.mousePosition - new Vector2(150, 30), new Vector2(300, 60));
+                            confirmTitle = "Switching modes";
+                            confirmText = "Edit graph in advanced mode? Simple mode data will be retained and can be returned to.";
+                            onConfirm = () => {
+                                graphData[lfg].advanced = true;
+                            };
+                            isConfirming = true;
+                        }
                         if (GUILayout.Button("X")) Hide();
                         GUILayout.Space(-6);
                     }
@@ -1181,7 +1291,7 @@ namespace AmazingNewAccessoryLogic
                                                 15f,
                                                 numBtns * (accBoxSize.y + 2f) + 35f - simpleWindowScrollPosAcs.y
                                             );
-                                            DoBindings(i, offset);
+                                            DoBindings(i + 1000000, offset);
                                         }
                                         GUILayout.EndVertical();
                                     } else {
@@ -1346,8 +1456,8 @@ namespace AmazingNewAccessoryLogic
                         GUILayout.EndScrollView();
                         GUILayout.EndArea();
 
-                        void DoBindings(int i, Vector2 dropOffset) {
-                            var binding = data.GetNodeBinding(i);
+                        void DoBindings(int idx, Vector2 dropOffset) {
+                            var binding = data.GetNodeBinding(idx);
                             GUILayout.BeginHorizontal();
                             {
                                 GUILayout.Space(5);
@@ -1358,7 +1468,7 @@ namespace AmazingNewAccessoryLogic
                                     GUILayout.Space(-2);
                                     string boundBtnLabel = binding != null ? binding.Value.ToString() : "None";
                                     if (GUILayout.Button(boundBtnLabel)) {
-                                        simpleAccBeingBound = i;
+                                        simpleAccBeingBound = idx;
                                         simpleAccBindRect = new Rect(
                                             simpleWindowRect.x + dropOffset.x,
                                             simpleWindowRect.y + dropOffset.y,
@@ -1409,13 +1519,13 @@ namespace AmazingNewAccessoryLogic
                                         GUILayout.EndHorizontal();
 
                                         bool isBound(int shift) {
-                                            return data.GetBoundState(i, shift);
+                                            return data.GetBoundState(idx, shift);
                                         }
                                         void toggleBoundState(int shift) {
                                             if (isBound(shift)) {
-                                                data.SetBoundState(i, shift, false);
+                                                data.SetBoundState(idx, shift, false);
                                             } else {
-                                                data.SetBoundState(i, shift, true);
+                                                data.SetBoundState(idx, shift, true);
                                             }
                                         }
                                     }
@@ -1464,7 +1574,15 @@ namespace AmazingNewAccessoryLogic
                 GUI.Label(new Rect(screenToGUI(lfg.positionUI + new Vector2(10, lfg.sizeUI.y + (lfg.getUIScale() * 20) + 15)), new Vector2(250, 25)), $"AmazingNewAccessoryLogic v{AmazingNewAccessoryLogic.Version}", headerTextStyle);
                 var closeRect = new Rect(screenToGUI(lfg.positionUI + lfg.sizeUI + new Vector2(-65, (lfg.getUIScale() * 28) + 4)), new Vector2(60, (lfg.getUIScale() * 10) + 10));
                 var simpleRect = new Rect(closeRect.position - new Vector2(closeRect.width + 5, 0), closeRect.size);
-                if (GUI.Button(simpleRect, "Simple")) { graphData[lfg].advanced = false; }
+                if (GUI.Button(simpleRect, "Simple")) {
+                    confirmRect = new Rect(Event.current.mousePosition - new Vector2(150, 30), new Vector2(300, 60));
+                    confirmTitle = "Switching modes";
+                    confirmText = "Apply simple mode data? ALL advanced mode edits will be lost!";
+                    onConfirm = () => {
+                        graphData[lfg].advanced = false;
+                    };
+                    isConfirming = true;
+                }
                 if (GUI.Button(closeRect, "Close")) { Hide(); }
 
                 normalInputRect.position = screenToGUI(lfg.positionUI + lfg.sizeUI + new Vector2(5, 0));
@@ -1644,6 +1762,7 @@ namespace AmazingNewAccessoryLogic
                         var boxRect = new Rect(Vector2.zero, simpleAccBindRect.size);
                         GUI.Box(boxRect, "");
                         GUI.Box(boxRect, "");
+                        GUI.Box(boxRect, "");
 
                         simpleAccBindScrollPos = GUILayout.BeginScrollView(simpleAccBindScrollPos);
                         {
@@ -1676,6 +1795,7 @@ namespace AmazingNewAccessoryLogic
                         var boxRect = new Rect(Vector2.zero, grpAddRect.size);
                         GUI.Box(boxRect, "");
                         GUI.Box(boxRect, "");
+                        GUI.Box(boxRect, "");
 
                         var allChildren = graphData[lfg].GetAllChildIndices();
                         var leftText = new GUIStyle(GUI.skin.button) {
@@ -1698,6 +1818,29 @@ namespace AmazingNewAccessoryLogic
                     }, "", solidSkin.box);
                     GUI.BringWindowToFront(simpleModeGroupAddID);
                     KKAPI.Utilities.IMGUIUtils.EatInputInRect(grpAddRect);
+                }
+                // Advanced -> Simple confirmation
+                inRect = new Rect(confirmRect.position - expansion, confirmRect.size + 2 * expansion);
+                if (isConfirming && !inRect.Contains(mouse)) {
+                    isConfirming = false;
+                }
+                if (isConfirming) {
+                    confirmRect = GUILayout.Window(confirmWindowID, confirmRect, (windowId) => {
+                        GUILayout.Label(confirmText);
+                        GUILayout.BeginHorizontal();
+                        {
+                            if (GUILayout.Button("Cancel")) {
+                                isConfirming = false;
+                            }
+                            if (GUILayout.Button("Confirm", bindStateStyleOff)) {
+                                onConfirm.Invoke();
+                                isConfirming = false;
+                            }
+                        }
+                        GUILayout.EndHorizontal();
+                    }, confirmTitle, solidSkin.window, GUILayout.MaxWidth(300f));
+                    GUI.BringWindowToFront(confirmWindowID);
+                    KKAPI.Utilities.IMGUIUtils.EatInputInRect(confirmRect);
                 }
             }
             #endregion

@@ -1,5 +1,6 @@
 ﻿using HarmonyLib;
 using LogicFlows;
+using System.Collections;
 using UnityEngine;
 
 namespace AmazingNewAccessoryLogic {
@@ -60,6 +61,14 @@ namespace AmazingNewAccessoryLogic {
                     return false;
                 }
                 return true;
+            }
+
+            [HarmonyPostfix]
+            [HarmonyPatch(typeof(ChaControl), "ChangeAccessory", new[] { typeof(int), typeof(int), typeof(int), typeof(string), typeof(bool) })]
+            private static void ChaControlAfterChangeAccessory(ChaControl __instance, int slotNo, int type) {
+                if (KKAPI.Maker.MakerAPI.InsideMaker && type == 0) {
+                    __instance.GetComponent<AnalCharaController>().AccessoryKindChanged(slotNo, true);
+                }
             }
         }
     }

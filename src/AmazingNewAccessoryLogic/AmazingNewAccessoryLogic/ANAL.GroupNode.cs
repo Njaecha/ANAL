@@ -7,6 +7,8 @@ namespace AmazingNewAccessoryLogic {
     public class LogicFlowNode_GRP : LogicFlowGate {
         public static LogicFlowNode requestor = null;
 
+        internal readonly AnalCharaController ctrl;
+
         private int _state = 0;
         internal int state {
             get {
@@ -24,8 +26,15 @@ namespace AmazingNewAccessoryLogic {
         // dic<state, set<enabledThingForThisState>>
         internal Dictionary<int, HashSet<int>> controlledNodes = new Dictionary<int, HashSet<int>>();
 
-        public LogicFlowNode_GRP(LogicFlowGraph parentGraph, int? key = null, string name = null) : base(new int?[1], parentGraph, key) {
-            setName(name ?? "GRP");
+        public LogicFlowNode_GRP(AnalCharaController controller, LogicFlowGraph parentGraph, int? key = null, string name = null) : base(new int?[1], parentGraph, key) {
+            ctrl = controller;
+
+            if (name == null) {
+                // This already includes the current node
+                int grpCount = parentGraph.nodes.Values.Where(x => x is LogicFlowNode_GRP).Count();
+                name = $"GRP {grpCount}";
+            }
+            setName(name);
             calcTooltip();
         }
 
@@ -42,14 +51,8 @@ namespace AmazingNewAccessoryLogic {
         }
 
         public void addActiveNode(int slot, int? state = null) {
-            LogicFlowNode node;
-            if (parentGraph.getNodeAt(slot + 1000000) == null) {
-                var ctrl = AnalCharaController.dicGraphToControl[parentGraph];
-                int outfit = ctrl.graphs.Keys.FirstOrDefault(x => ctrl.graphs[x] == parentGraph);
-                node = AnalCharaController.dicGraphToControl[parentGraph].addOutput(slot, outfit);
-            } else {
-                node = parentGraph.getNodeAt(1000000 + slot);
-            }
+            int outfit = ctrl.graphs.Keys.FirstOrDefault(x => ctrl.graphs[x] == parentGraph);
+            LogicFlowNode node = ctrl.getOutput(slot) ?? ctrl.addOutput(slot, outfit);
             addActiveNode(node, state);
         }
 
@@ -74,7 +77,7 @@ namespace AmazingNewAccessoryLogic {
         }
 
         public string getName() {
-            return label.TrimEnd(new[] { '-', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', ':', ' ' }).Trim();
+            return label.TrimEnd(new[] { '-', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9' }).TrimEnd(new[] { ':', ' ' }).Trim();
         }
 
         public override void drawSymbol() {
@@ -113,11 +116,10 @@ namespace AmazingNewAccessoryLogic {
         }
 
         protected override void clone() {
-            LogicFlowNode_GRP clonedGroup = new LogicFlowNode_GRP(parentGraph) {
-                label = label,
+            LogicFlowNode_GRP clonedGroup = new LogicFlowNode_GRP(ctrl, parentGraph) {
                 toolTipText = toolTipText,
             };
-            clonedGroup.setName(clonedGroup.getName());
+            clonedGroup.setName(clonedGroup.getName() + " (Clone)");
             clonedGroup.setPositionUI(rect.position + new Vector2(20f, 20f));
         }
     }

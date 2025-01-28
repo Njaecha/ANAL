@@ -33,6 +33,7 @@ namespace AmazingNewAccessoryLogic
 
         public static AmazingNewAccessoryLogic Instance;
 
+        public static ConfigEntry<bool> Debug;
         public static ConfigEntry<float> UIScaleModifier;
 
         void Awake()
@@ -46,7 +47,9 @@ namespace AmazingNewAccessoryLogic
 
             AccessoriesApi.AccessoryTransferred += AccessoryTransferred;
             AccessoriesApi.AccessoriesCopied += AccessoriesCopied;
+            AccessoriesApi.AccessoryKindChanged += AccessoryKindChanged;
 
+            Debug = Config.Bind("Advanced", "Debug", false, new ConfigDescription("Whether to log detailed debug messages", null, new KKAPI.Utilities.ConfigurationManagerAttributes{ IsAdvanced = true }));
             UIScaleModifier = Config.Bind("UI", "UI Scale Factor", Screen.height <= 1080 ? 1.3f : 1f, new ConfigDescription("Additional Scale to apply to the UI", new AcceptableValueRange<float>(0.5f, 2f)));
 
             Patches.Patch();
@@ -79,7 +82,6 @@ namespace AmazingNewAccessoryLogic
             ChaFileDefine.CoordinateType sType = e.CopySource;
             IEnumerable<int> slots = e.CopiedSlotIndexes;
             MakerAPI.GetCharacterControl().gameObject.GetComponent<AnalCharaController>().AccessoriesCopied((int)sType, (int)dType, slots);
-
         }
 
         private void AccessoryTransferred(object sender, AccessoryTransferEventArgs e)
@@ -87,7 +89,11 @@ namespace AmazingNewAccessoryLogic
             int dSlot = e.DestinationSlotIndex;
             int sSlot = e.SourceSlotIndex;
             MakerAPI.GetCharacterControl().gameObject.GetComponent<AnalCharaController>().AccessoryTransferred(sSlot, dSlot);
+        }
 
+        private void AccessoryKindChanged(object sender, AccessorySlotEventArgs e) {
+            int changedSlot = e.SlotIndex;
+            MakerAPI.GetCharacterControl().gameObject.GetComponent<AnalCharaController>().AccessoryKindChanged(changedSlot);
         }
 
         private void showGraphInMaker(bool b)

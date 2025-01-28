@@ -9,6 +9,7 @@ using System.Collections.Generic;
 namespace AmazingNewAccessoryLogic {
     public class GraphData {
         public readonly LogicFlowGraph graph;
+        internal readonly AnalCharaController ctrl;
 
         private bool _advanced = false;
         public bool advanced {
@@ -17,7 +18,7 @@ namespace AmazingNewAccessoryLogic {
             }
             set {
                 _advanced = value;
-                MakeGraph(true);
+                MakeGraphInternal(true);
             }
         }
 
@@ -47,16 +48,21 @@ namespace AmazingNewAccessoryLogic {
             }
         }
 
+        // dic<grpIdx, List<accSlot>>
         private Dictionary<int, List<int>> groupChildren = new Dictionary<int, List<int>>();
+        // dic<nodeIdx, bindingtype>
         private Dictionary<int, BindingType?> bindings = new Dictionary<int, BindingType?>();
+        // dic <nodeIdx, boundStatesBitmap>
         private Dictionary<int, byte> activeBoundStates = new Dictionary<int, byte>();
 
         private List<int> changedNodes = new List<int>();
 
         private bool makeRunning = false;
 
-        public GraphData(LogicFlowGraph logicGraph, SerialisedGraphData sGD = null) {
+        public GraphData(AnalCharaController controller, LogicFlowGraph logicGraph, SerialisedGraphData sGD = null) {
             graph = logicGraph;
+            ctrl = controller;
+
             advanced = false;
             if (sGD != null) {
                 advanced = sGD.advanced;
@@ -76,33 +82,52 @@ namespace AmazingNewAccessoryLogic {
             }
             groupChildren[grpIdx].Add(childSlot);
 
-            var ctrl = AnalCharaController.dicGraphToControl[graph];
             int outfit = ctrl.graphs.Keys.FirstOrDefault(x => ctrl.graphs[x] == graph);
             if (ctrl.getOutput(childSlot, outfit) == null) {
                 ctrl.addOutput(childSlot, outfit);
             }
 
-            changedNodes.Add(childSlot);
+            changedNodes.Add(childSlot + 1000000);
             changedNodes.Add(grpIdx);
-            MakeLater();
+            MakeGraph();
         }
 
-        public bool RemoveChild(int grpIdx, int childSlot) {
-            if (!groupChildren.ContainsKey(grpIdx)) return false;
+        public bool RemoveChild(int? grpIdx, int childSlot) {
+            if (grpIdx == null) {
+                grpIdx = GetGroup(childSlot);
+                if (grpIdx == null) return false;
+            } else if (!groupChildren.ContainsKey(grpIdx.Value)) {
+                return false;
+            }
 
-            bool result = groupChildren[grpIdx].Remove(childSlot);
+            bool result = groupChildren[grpIdx.Value].Remove(childSlot);
             if (result) {
                 graph.getNodeAt(childSlot + 1000000).inputs[0] = null;
             }
 
-            changedNodes.Add(childSlot);
-            changedNodes.Add(grpIdx);
-            MakeLater();
+            changedNodes.Add(childSlot + 1000000);
+            changedNodes.Add(grpIdx.Value);
+            MakeGraph();
             return result;
         }
 
         public bool TryGetChildren(int grpIdx, out List<int> children) {
             return groupChildren.TryGetValue(grpIdx, out children);
+        }
+
+        public int? GetGroup(int slot) {
+            var grp = groupChildren.Where(x => x.Value.Contains(slot));
+            if (grp.Count() == 0) return null;
+            return grp.ToList()[0].Key;
+        }
+
+        public List<int> GetActiveGroupStates(int slot) {
+            var node = graph.getNodeAt(slot + 1000000);
+            if (node == null) return null;
+            int? grpIdx = GetGroup(slot);
+            if (grpIdx == null) return null;
+            var grp = (LogicFlowNode_GRP)graph.getNodeAt(grpIdx.Value);
+            return grp.controlledNodes.Where(x => x.Value.Contains(node.index)).Select(x => x.Key).ToList();
         }
 
         public HashSet<int> GetAllChildIndices() {
@@ -124,7 +149,7 @@ namespace AmazingNewAccessoryLogic {
             bindings[idx] = value;
 
             changedNodes.Add(idx);
-            MakeLater();
+            MakeGraph();
         }
 
         public bool GetBoundState(int idx, int shift) {
@@ -150,7 +175,7 @@ namespace AmazingNewAccessoryLogic {
             }
 
             changedNodes.Add(idx);
-            MakeLater();
+            MakeGraph();
         }
         
         public void SetBoundStates(int idx, byte val) {
@@ -160,7 +185,7 @@ namespace AmazingNewAccessoryLogic {
             activeBoundStates[idx] = val;
 
             changedNodes.Add(idx);
-            MakeLater();
+            MakeGraph();
         }
 
         public List<int> GetGroups() {
@@ -174,33 +199,68 @@ namespace AmazingNewAccessoryLogic {
         public void RemoveGroup(int grpIdx) {
             if (groupChildren.TryGetValue(grpIdx, out var children)) {
                 foreach (var child in children) {
-                    changedNodes.Add(child);
+                    changedNodes.Add(child + 1000000);
                 }
                 groupChildren.Remove(grpIdx);
-                MakeLater();
+                MakeGraph();
             }
         }
 
-        private void MakeLater() {
+        public void PurgeNode(LogicFlowNode node) {
+            if (node == null) return;
+            SetNodeBinding(node.index, null);
+            SetBoundStates(node.index, 0);
+            if (node is LogicFlowOutput) {
+                RemoveChild(null, node.index - 1000000);
+            }
+        }
+
+        public static void CopyAccData(int srcSlot, GraphData srcData, int dstSlot = -1, GraphData dstData = null) {
+            if (AmazingNewAccessoryLogic.Debug.Value) AmazingNewAccessoryLogic.Logger.LogInfo("Copying accessory data...");
+            if (dstData == null && dstSlot == -1) return;
+            if (dstData == null) dstData = srcData;
+            if (dstSlot == -1) dstSlot = srcSlot;
+            var srcNode = srcData.graph.getNodeAt(srcSlot + 1000000);
+            var dstNode = dstData.graph.getNodeAt(dstSlot + 1000000);
+            if (srcNode == null || dstNode == null) return;
+
+            int? grpIdx = srcData.GetGroup(srcSlot);
+            if (grpIdx != null) {
+                dstData.AddChild(grpIdx.Value, dstSlot);
+                var actives = srcData.GetActiveGroupStates(srcSlot);
+                if (actives != null && actives.Count > 0) {
+                    var srcGrp = (LogicFlowNode_GRP)srcData.graph.getNodeAt(grpIdx.Value);
+                    var dstGrp = (LogicFlowNode_GRP)dstData.graph.getNodeAt(grpIdx.Value);
+                    foreach (int activeState in actives) {
+                        dstGrp.addActiveNode(dstSlot, activeState);
+                    }
+                    dstData.SetNodeBinding(dstGrp.index, srcData.GetNodeBinding(srcGrp.index));
+                    dstData.SetBoundStates(dstGrp.index, srcData.GetBoundStates(srcGrp.index));
+                }
+            }
+            dstData.SetNodeBinding(dstNode.index, srcData.GetNodeBinding(srcNode.index));
+            dstData.SetBoundStates(dstNode.index, srcData.GetBoundStates(srcNode.index));
+        }
+
+        internal void MakeGraph() {
             if (!makeRunning) {
                 makeRunning = true;
-                AmazingNewAccessoryLogic.Instance.StartCoroutine(DoMakeLater());
+                AmazingNewAccessoryLogic.Instance.StartCoroutine(DoMakeGraph());
             }
 
-            IEnumerator DoMakeLater() {
+            IEnumerator DoMakeGraph() {
                 yield return null;
-                MakeGraph();
+                MakeGraphInternal();
                 makeRunning = false;
             }
         }
 
-        public void MakeGraph(bool all = false) {
+        private void MakeGraphInternal(bool all = false) {
             // Only make the graph in simple mode
             if (advanced) return;
 
-            // Get control and current outfit
-            if (!AnalCharaController.dicGraphToControl.TryGetValue(graph, out var ctrl)) return;
-            int outfit = ctrl.graphs.Keys.FirstOrDefault(x => ctrl.graphs[x] == graph);
+            // Get outfit of graph
+            int outfit = ctrl.graphs.Where(x => x.Value == graph).FirstOrDefault().Key;
 
             graph.isLoading = true;
 
@@ -232,8 +292,8 @@ namespace AmazingNewAccessoryLogic {
                 }
             } else {
                 foreach (var node in graph.nodes) {
-                    if (!changedNodes.Contains(node.Value.index < 0 ? node.Value.index : node.Value.index - 1000000)) continue;
-                    if (allGroupChildren.Contains(node.Value.index)) continue;
+                    if (!changedNodes.Contains(node.Value.index)) continue;
+                    if (allGroupChildren.Contains(node.Value.index - 1000000)) continue;
                     LogicFlowNode current = null;
                     List<LogicFlowNode> toCheck = new List<LogicFlowNode> { node.Value };
                     while (toCheck.Count > 0) {
@@ -261,22 +321,20 @@ namespace AmazingNewAccessoryLogic {
             foreach (var kvp in groupChildren) {
                 if (!(all || changedNodes.Contains(kvp.Key))) continue;
                 var grp = (LogicFlowNode_GRP)graph.getNodeAt(kvp.Key);
+                if (grp == null) continue;
                 foreach (var slot in kvp.Value) {
-                    LogicFlowOutput node = ctrl.getOutput(slot, outfit);
-                    if (node == null) node = ctrl.addOutput(slot, outfit);
-                    if (node.inputs[0] != kvp.Key) {
-                        node.SetInput(kvp.Key, 0);
-                    }
+                    LogicFlowOutput node = ctrl.getOutput(slot, outfit) ?? ctrl.addOutput(slot, outfit);
+                    node.SetInput(grp.index, 0);
                 }
             }
 
             // Connect clothing states to requisite nodes
             foreach (var kvp in bindings) {
                 // Skip unbound, unchanged (if not updating all), and in-group accessories
-                if (allGroupChildren.Contains(kvp.Key)) continue;
+                if (allGroupChildren.Contains(kvp.Key - 1000000)) continue;
                 if (!(all || changedNodes.Contains(kvp.Key))) continue;
                 if (kvp.Value == null) {
-                    var node = ctrl.getOutput(kvp.Key, outfit);
+                    var node = ctrl.getOutput(kvp.Key - 1000000, outfit);
                     if (node != null) {
                         node.inputs[0] = null;
                     }
@@ -288,9 +346,9 @@ namespace AmazingNewAccessoryLogic {
                 if (kvp.Key < 0) {
                     boundNode = graph.getNodeAt(kvp.Key);
                 } else {
-                    boundNode = ctrl.getOutput(kvp.Key, outfit);
+                    boundNode = ctrl.getOutput(kvp.Key - 1000000, outfit);
                     if (boundNode == null) {
-                        boundNode = ctrl.addOutput(kvp.Key, outfit);
+                        boundNode = ctrl.addOutput(kvp.Key - 1000000, outfit);
                     }
                 }
                 if (boundNode == null) continue;
@@ -388,18 +446,19 @@ namespace AmazingNewAccessoryLogic {
         }
 
         private void CleanGraph() {
-            var ctrl = AnalCharaController.dicGraphToControl[graph];
-            int outfit = ctrl.graphs.Keys.FirstOrDefault(x => ctrl.graphs[x] == graph);
+            int outfit = ctrl.graphs.Where(x => x.Value == graph).FirstOrDefault().Key;
 
             // Get all node indices whose outputs are being used
+            if (AmazingNewAccessoryLogic.Debug.Value) AmazingNewAccessoryLogic.Logger.LogInfo("Analysing dependencies...");
             HashSet<int> allSources = new HashSet<int>();
-            foreach (var node in graph.nodes) {
-                foreach (int? idx in node.Value.inputs) {
+            foreach (var node in graph.nodes.Values) {
+                foreach (int? idx in node.inputs) {
                     if (idx != null) allSources.Add(idx.Value);
                 }
             }
 
             // Remove any unconnected nodes
+            if (AmazingNewAccessoryLogic.Debug.Value) AmazingNewAccessoryLogic.Logger.LogInfo("Removing unconnected nodes...");
             HashSet<int> toRemove = new HashSet<int>();
             foreach (var node in graph.nodes.Values) {
                 if (node is LogicFlowOutput && node.inputAt(0) == null) {
@@ -428,29 +487,30 @@ namespace AmazingNewAccessoryLogic {
             }
 
             // Prettify layout
+            if (AmazingNewAccessoryLogic.Debug.Value) AmazingNewAccessoryLogic.Logger.LogInfo("Arranging nodes...");
             int numOutputs = 0;
             float perNodeOffset = 35f;
             var allChildren = GetAllChildIndices();
+            // First we handle the groups
             foreach (var kvp in groupChildren) {
-                float y = 0f;
                 foreach (int child in kvp.Value) {
                     numOutputs++;
                     var output = ctrl.getOutput(child, outfit);
                     output.setPosition(AnalCharaController.OutputPos(numOutputs));
-                    y += output.getPosition().y;
                 }
                 var grp = graph.getNodeAt(kvp.Key);
                 if (kvp.Value.Count > 0) {
-                    float newY = y / kvp.Value.Count;
+                    float newY = ctrl.getOutput(kvp.Value[0], outfit).getPosition().y;
                     float newX = AnalCharaController.defaultGraphSize.x - 80f - perNodeOffset - grp.getSize().x;
                     grp.setPosition(new Vector2(newX, newY));
                 }
                 SetChainPos(grp);
             }
+            // Then the remaining non-grouped, but bound accessories
             foreach (var slot in bindings) {
-                if (slot.Key > -1 && slot.Value != null && !allChildren.Contains(slot.Key)) {
+                if (slot.Key > -1 && slot.Value != null && !allChildren.Contains(slot.Key - 1000000)) {
                     numOutputs++;
-                    var output = ctrl.getOutput(slot.Key, outfit);
+                    var output = ctrl.getOutput(slot.Key - 1000000, outfit);
                     if (output == null) continue;
                     output.setPosition(AnalCharaController.OutputPos(numOutputs));
                     SetChainPos(output);
@@ -458,6 +518,7 @@ namespace AmazingNewAccessoryLogic {
             }
 
             // Set graph size to encompass all outputs
+            if (AmazingNewAccessoryLogic.Debug.Value) AmazingNewAccessoryLogic.Logger.LogInfo("Adjusting graph size...");
             graph.setSize(new Vector2(
                 AnalCharaController.defaultGraphSize.x + AnalCharaController.OutputCol(numOutputs) * 100f,
                 AnalCharaController.defaultGraphSize.y
