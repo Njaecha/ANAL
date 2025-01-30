@@ -74,6 +74,7 @@ namespace AmazingNewAccessoryLogic
                     if (!display) StudioAPI.GetSelectedControllers<AnalCharaController>().Do(controller => controller.Hide());
                     else StudioAPI.GetSelectedControllers<AnalCharaController>().Do(controller => controller.Show(Input.GetKey(KeyCode.LeftShift)));
                 });
+            TimelineHelper.PopulateTimeline();
         }
 
         private void AccessoriesCopied(object sender, AccessoryCopyEventArgs e)
@@ -103,6 +104,16 @@ namespace AmazingNewAccessoryLogic
                 MakerAPI.GetCharacterControl()?.GetComponent<AnalCharaController>()?.Show(Input.GetKey(KeyCode.LeftShift));
             }
             else MakerAPI.GetCharacterControl()?.GetComponent<AnalCharaController>()?.Hide();
+        }
+
+        internal static void showMakerButtons(bool show) {
+            if (!MakerAPI.InsideMaker) return;
+            foreach (GameObject btn in AccessoryButton.ControlObjects) {
+                btn.SetActive(show);
+            }
+            foreach (GameObject btn in AccessoryButton2.ControlObjects) {
+                btn.SetActive(show);
+            }
         }
 
         private void createMakerInteractables(object sender, RegisterCustomControlsEvent e)

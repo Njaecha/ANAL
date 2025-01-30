@@ -16,6 +16,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)ANAL.Patches.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)ANAL.SerialisedGraph.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)ANAL.SerialisedNode.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)ANAL.TimelineHelper.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)ASS.TriggerProperty.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)ANAL.GroupNode.cs" />
   </ItemGroup>

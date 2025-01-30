@@ -6,9 +6,11 @@ using KKAPI.Chara;
 using MessagePack;
 using UnityEngine;
 using KKAPI.Maker;
+using KKAPI.Studio;
 using System.Collections;
 using ExtensibleSaveFormat;
 using System.Collections.Generic;
+using KKAPI.Utilities;
 
 namespace AmazingNewAccessoryLogic
 {
@@ -99,6 +101,9 @@ namespace AmazingNewAccessoryLogic
                 }
             }
 
+            bool show = lfg != null ? graphData[lfg].advanced : false;
+            AmazingNewAccessoryLogic.showMakerButtons(show);
+
             base.OnReload(currentGameMode, maintainState);
         }
 
@@ -162,6 +167,9 @@ namespace AmazingNewAccessoryLogic
                     lfg?.ForceUpdate();
                 }
             }
+
+            bool show = lfg != null ? graphData[lfg].advanced : false;
+            AmazingNewAccessoryLogic.showMakerButtons(show);
         }
 
         internal void AccessoryTransferred(int sourceSlot, int destinationSlot)
@@ -1060,7 +1068,7 @@ namespace AmazingNewAccessoryLogic
             }
             if (displayGraph)
             {
-                if ((!MakerAPI.InsideMaker && !KKAPI.Studio.StudioAPI.InsideStudio) || Input.GetKeyDown(KeyCode.F1) || Input.GetKeyDown(KeyCode.Escape)) {
+                if ((!MakerAPI.InsideMaker && !StudioAPI.InsideStudio) || Input.GetKeyDown(KeyCode.F1) || Input.GetKeyDown(KeyCode.Escape)) {
                     Hide();
                     return;
                 }
@@ -1231,6 +1239,7 @@ namespace AmazingNewAccessoryLogic
                             confirmText = "Edit graph in advanced mode? Simple mode data will be retained and can be returned to.";
                             onConfirm = () => {
                                 graphData[lfg].advanced = true;
+                                AmazingNewAccessoryLogic.showMakerButtons(true);
                             };
                             isConfirming = true;
                         }
@@ -1344,6 +1353,12 @@ namespace AmazingNewAccessoryLogic
                                             GUILayout.Space(5);
                                             GUILayout.Label(node.getName());
                                             GUILayout.FlexibleSpace();
+                                            if (StudioAPI.InsideStudio && TimelineCompatibility.IsTimelineAvailable()) {
+                                                if (GUILayout.Button("Animate")) {
+                                                    AmazingNewAccessoryLogic.Logger.LogMessage("Group node selected!");
+                                                    TimelineHelper.SelectGroup(node);
+                                                }
+                                            }
                                             if (GUILayout.Button("Rename")) {
                                                 renamedNode = node.index;
                                                 renameRect = new Rect(Event.current.mousePosition - new Vector2(120, 20) + grpRect.position + simpleWindowRect.position, new Vector2(240, 40));
@@ -1540,7 +1555,7 @@ namespace AmazingNewAccessoryLogic
                     }
 
                     GUI.Box(new Rect(simpleWindowRect.size - new Vector2(13, 13), new Vector2(13, 13)), "", whiteBox);
-                    simpleWindowRect = KKAPI.Utilities.IMGUIUtils.DragResizeEatWindow(simpleModeWindowID, simpleWindowRect);
+                    simpleWindowRect = IMGUIUtils.DragResizeEatWindow(simpleModeWindowID, simpleWindowRect);
                 }, $"ANAL v{AmazingNewAccessoryLogic.Version} - Simple Mode", solidSkin.window);
                 var sWP = simpleWindowRect.position;
                 var sWS = simpleWindowRect.size;
@@ -1552,8 +1567,8 @@ namespace AmazingNewAccessoryLogic
                     Mathf.Max(simpleMinWidth, simpleWindowRect.width),
                     Mathf.Max(simpleMinHeight, simpleWindowRect.height)
                 );
-            } /* else */ if (displayGraph /* && graphData[lfg].advanced */) {
-                var solidSkin = KKAPI.Utilities.IMGUIUtils.SolidBackgroundGuiSkin;
+            } else if (displayGraph && graphData[lfg].advanced) {
+                var solidSkin = IMGUIUtils.SolidBackgroundGuiSkin;
                 Rect guiRect = new Rect(screenToGUI(lfg.positionUI), new Vector2(lfg.sizeUI.x, -lfg.sizeUI.y));
 
                 if (showAdvancedInputWindow) {
@@ -1580,6 +1595,7 @@ namespace AmazingNewAccessoryLogic
                     confirmText = "Apply simple mode data? ALL advanced mode edits will be lost!";
                     onConfirm = () => {
                         graphData[lfg].advanced = false;
+                        AmazingNewAccessoryLogic.showMakerButtons(false);
                     };
                     isConfirming = true;
                 }
@@ -1611,8 +1627,8 @@ namespace AmazingNewAccessoryLogic
                     if (GUILayout.Button("Show Help")) showHelp = !showHelp;
                     GUILayout.Space(8);
 
-                    #region Studio Output Widget
-                    if (KKAPI.Studio.StudioAPI.InsideStudio) {
+                    #region Studio Widgets
+                    if (StudioAPI.InsideStudio) {
                         GUILayout.BeginHorizontal();
                         studioAddOutputTextInput = GUILayout.TextField(studioAddOutputTextInput);
                         if (GUILayout.Button("+", GUILayout.Width(25)) && int.TryParse(studioAddOutputTextInput, out int a)) studioAddOutputTextInput = (a + 1).ToString();
@@ -1621,6 +1637,21 @@ namespace AmazingNewAccessoryLogic
                         if (GUILayout.Button("Add Output")) {
                             if (int.TryParse(studioAddOutputTextInput, out int slot) && slot >= 1) {
                                 addOutput(slot - 1);
+                            }
+                        }
+                        if (TimelineCompatibility.IsTimelineAvailable()) {
+                            if (GUILayout.Button("Animate Group")) {
+                                if (lfg.selectedNodes.Count != 1) {
+                                    AmazingNewAccessoryLogic.Logger.LogMessage("Select one Group node to animate!");
+                                } else {
+                                    var selected = lfg.getNodeAt(lfg.selectedNodes[0]);
+                                    if (!(selected is LogicFlowNode_GRP)) {
+                                        AmazingNewAccessoryLogic.Logger.LogMessage("Select one Group node to animate!");
+                                    } else {
+                                        AmazingNewAccessoryLogic.Logger.LogMessage("Activated interpolable: ANAL -> Group state");
+                                        TimelineHelper.SelectGroup((LogicFlowNode_GRP)selected);
+                                    }
+                                }
                             }
                         }
                     }
@@ -1652,7 +1683,7 @@ namespace AmazingNewAccessoryLogic
 
                 lfg.ongui();
 
-                #region Advanced Mode EVENTS
+                #region Advanced Mode Events
                 {
                     Event e = Event.current;
                     if (e.isMouse && e.type == EventType.MouseUp && guiRect.Contains(e.mousePosition, true)) {
