@@ -18,7 +18,7 @@ namespace AmazingNewAccessoryLogic {
             }
             set {
                 _advanced = value;
-                MakeGraphInternal(true);
+                if (!graph.isLoading) MakeGraphInternal(true);
             }
         }
 

@@ -83,7 +83,7 @@ namespace AmazingNewAccessoryLogic
             {
                 version = (byte)versionS;
             }
-            if (version <= 2)
+            if (version > 0 && version <= 2)
             {
                 Dictionary<int, SerialisedGraph> sGraphs;
                 Dictionary<int, SerialisedGraphData> sGraphData = null;
@@ -299,10 +299,14 @@ namespace AmazingNewAccessoryLogic
             graphData.Add(graphs[outfit], new GraphData(this, newGraph, sGraphData));
             if (sGraphData == null) graphData[graphs[outfit]].advanced = true;
             newGraph.isLoading = false;
+            if (AmazingNewAccessoryLogic.Debug.Value) AmazingNewAccessoryLogic.Logger.LogInfo($"Nodes in loaded graph: {newGraph.nodes.Count}");
         }
 
         private void deserialiseNode(int version, int outfit, SerialisedNode sNode)
         {
+            if (AmazingNewAccessoryLogic.Debug.Value) {
+                AmazingNewAccessoryLogic.Logger.LogInfo($"Deserialising node: {sNode.type}, {sNode.name}, {sNode.index}");
+            }
             LogicFlowNode node = null;
             switch (sNode.type) {
                 case SerialisedNode.NodeType.Gate_NOT:
@@ -345,10 +349,14 @@ namespace AmazingNewAccessoryLogic
                 case SerialisedNode.NodeType.Output:
                     if (version == 1 && sNode.data.Count > 1) {
                         node = addOutput(sNode.data[0], outfit);
-                        node.SetInput(sNode.data[1], 0);
+                        StartCoroutine(SetInputLater(1));
                     } else {
                         node = addOutput(sNode.index - 1000000, outfit, sNode.name);
-                        if (sNode.data?.Count > 0) node.SetInput(sNode.data[0], 0);
+                        if (sNode.data?.Count > 0) StartCoroutine(SetInputLater(0));
+                    }
+                    IEnumerator SetInputLater(int which) {
+                        yield return null;
+                        node.SetInput(sNode.data[which], 0);
                     }
                     break;
                 case SerialisedNode.NodeType.AdvancedInput:
@@ -496,10 +504,10 @@ namespace AmazingNewAccessoryLogic
                     break;
 #else
                 case 1017:
-                    node = new LogicFlowInput_Func(() => getClothState(7, 0), g, key: 1017) {label = name ?? "Indoor On" };
+                    node = new LogicFlowInput_Func(() => getShoeState(7, 0, 0), g, key: 1017) {label = name ?? "Indoor On" };
                     break;
                 case 1018:
-                    node = new LogicFlowInput_Func(() => getClothState(8, 0), g, key: 1018) {label = name ?? "Outdoor On" };
+                    node = new LogicFlowInput_Func(() => getShoeState(8, 0, 1), g, key: 1018) {label = name ?? "Outdoor On" };
                     break;
 #endif          
                 default:
@@ -983,6 +991,13 @@ namespace AmazingNewAccessoryLogic
             return ChaControl.fileStatus.clothesState[clothType] == stateValue;
         }
 
+#if KK
+        public bool getShoeState(int clothType, byte stateValue, int shoe) {
+            var file = ChaControl.fileStatus;
+            return file.shoesType == shoe && file.clothesState[clothType] == stateValue;
+        }
+#endif
+
         public void setAccessoryState(int accessorySlot, bool stateValue)
         {
             if (accessorySlot > ChaControl.fileStatus.showAccessory.Length) return;
@@ -1189,6 +1204,7 @@ namespace AmazingNewAccessoryLogic
         private int? grpBeingAddedTo = null;
         private Rect grpAddRect = new Rect();
         private Vector2 grpAddScrollPos = Vector2.zero;
+        private string grpAddFilter = "";
 
         private bool isConfirming = false;
         private Rect confirmRect = new Rect();
@@ -1205,9 +1221,9 @@ namespace AmazingNewAccessoryLogic
                 InitGUI();
             }
 
+            // Main simple window
             if (displayGraph && !graphData[lfg].advanced) {
-                // Main simple window
-                var solidSkin = KKAPI.Utilities.IMGUIUtils.SolidBackgroundGuiSkin;
+                var solidSkin = IMGUIUtils.SolidBackgroundGuiSkin;
                 simpleWindowRect = GUILayout.Window(simpleModeWindowID, simpleWindowRect, (windowId) => {
                     var data = graphData[lfg];
 
@@ -1449,6 +1465,7 @@ namespace AmazingNewAccessoryLogic
                                                 GUILayout.FlexibleSpace();
                                                 if (GUILayout.Button(" + ")) {
                                                     grpBeingAddedTo = node.index;
+                                                    grpAddFilter = "";
                                                     grpAddRect = new Rect(
                                                         simpleWindowRect.x + simpleWindowRect.width - 335f,
                                                         simpleWindowRect.y + baseHeight + sumChildren * (childHeight) + baseBoxHeight * (i + 1) - simpleWindowScrollPosGrp.y,
@@ -1567,7 +1584,9 @@ namespace AmazingNewAccessoryLogic
                     Mathf.Max(simpleMinWidth, simpleWindowRect.width),
                     Mathf.Max(simpleMinHeight, simpleWindowRect.height)
                 );
-            } else if (displayGraph && graphData[lfg].advanced) {
+            }
+            // Advanced mode window
+            else if (displayGraph && graphData[lfg].advanced) {
                 var solidSkin = IMGUIUtils.SolidBackgroundGuiSkin;
                 Rect guiRect = new Rect(screenToGUI(lfg.positionUI), new Vector2(lfg.sizeUI.x, -lfg.sizeUI.y));
 
@@ -1727,10 +1746,11 @@ namespace AmazingNewAccessoryLogic
 
             #region Temporary IMGUI Elements
             {
-                var solidSkin = KKAPI.Utilities.IMGUIUtils.SolidBackgroundGuiSkin;
-                Vector2 expansion = new Vector2(10, 10);
+                var solidSkin = IMGUIUtils.SolidBackgroundGuiSkin;
                 var mouse = Event.current.mousePosition;
+                Vector2 expansion;
                 // Node renaming
+                expansion = new Vector2(30, 10);
                 if (renamedNode != null && !new Rect(renameRect.position - expansion, renameRect.size + 2 * expansion).Contains(mouse)) {
                     renamedNode = null;
                 }
@@ -1758,9 +1778,10 @@ namespace AmazingNewAccessoryLogic
                         GUILayout.EndVertical();
                     }, $"Renaming '{lfg.nodes[renamedNode.GetValueOrDefault()].label}'", solidSkin.window);
                     GUI.BringWindowToFront(renameWindowID);
-                    KKAPI.Utilities.IMGUIUtils.EatInputInRect(renameRect);
+                    IMGUIUtils.EatInputInRect(renameRect);
                 }
                 // Group connection selection
+                expansion = new Vector2(10, 10);
                 if (groupToSetActives != null && !new Rect(groupScrollRect.position - expansion, groupScrollRect.size + 2 * expansion).Contains(mouse)) {
                     groupToSetActives = null;
                 }
@@ -1780,11 +1801,11 @@ namespace AmazingNewAccessoryLogic
                         GUILayout.EndScrollView();
                     }, $"Accs for state {groupToSetActives.state}", solidSkin.window);
                     GUI.BringWindowToFront(groupSelectWindowID);
-                    KKAPI.Utilities.IMGUIUtils.EatInputInRect(groupScrollRect);
+                    IMGUIUtils.EatInputInRect(groupScrollRect);
                 }
                 // Binding selector
-                var inRect = new Rect(simpleAccBindRect.position - expansion - new Vector2(0, 20), simpleAccBindRect.size + 2 * expansion + new Vector2(0, 20));
-                if (simpleAccBeingBound != null && !inRect.Contains(mouse)) {
+                expansion = new Vector2(10, 30);
+                if (simpleAccBeingBound != null && !new Rect(simpleAccBindRect.position - expansion, simpleAccBindRect.size + 2 * expansion).Contains(mouse)) {
                     simpleAccBeingBound = null;
                 }
                 if (simpleAccBeingBound != null) {
@@ -1816,8 +1837,8 @@ namespace AmazingNewAccessoryLogic
                     KKAPI.Utilities.IMGUIUtils.EatInputInRect(simpleAccBindRect);
                 }
                 // New child selection
-                inRect = new Rect(grpAddRect.position - expansion - new Vector2(0, 20), grpAddRect.size + 2 * expansion + new Vector2(0, 20));
-                if (grpBeingAddedTo != null && !inRect.Contains(mouse)) {
+                expansion = new Vector2(10, 30);
+                if (grpBeingAddedTo != null && !new Rect(grpAddRect.position - expansion, grpAddRect.size + 2 * expansion).Contains(mouse)) {
                     grpBeingAddedTo = null;
                 }
                 if (grpBeingAddedTo != null) {
@@ -1835,9 +1856,16 @@ namespace AmazingNewAccessoryLogic
                         };
                         grpAddScrollPos = GUILayout.BeginScrollView(grpAddScrollPos);
                         {
+                            GUILayout.BeginHorizontal();
+                            {
+                                GUILayout.Label("Filter ", GUILayout.ExpandWidth(false));
+                                grpAddFilter = GUILayout.TextField(grpAddFilter);
+                            }
+                            GUILayout.EndHorizontal();
                             for (int i = 0; i < ChaControl.infoAccessory.Length; i++) {
                                 if (ChaControl.infoAccessory[i] == null) continue;
                                 if (allChildren.Contains(i)) continue;
+                                if (grpAddFilter.Length > 0 && !ChaControl.infoAccessory[i].Name.ToLower().Contains(grpAddFilter.ToLower())) continue;
                                 if (GUILayout.Button($"Slot {i + 1} - {ChaControl.infoAccessory[i].Name}", leftText)) {
                                     graphData[lfg].AddChild(grpBeingAddedTo.Value, i);
                                     grpBeingAddedTo = null;
@@ -1848,11 +1876,11 @@ namespace AmazingNewAccessoryLogic
                         GUILayout.EndScrollView();
                     }, "", solidSkin.box);
                     GUI.BringWindowToFront(simpleModeGroupAddID);
-                    KKAPI.Utilities.IMGUIUtils.EatInputInRect(grpAddRect);
+                    IMGUIUtils.EatInputInRect(grpAddRect);
                 }
-                // Advanced -> Simple confirmation
-                inRect = new Rect(confirmRect.position - expansion, confirmRect.size + 2 * expansion);
-                if (isConfirming && !inRect.Contains(mouse)) {
+                // Confirmation window
+                expansion = new Vector2(10, 10);
+                if (isConfirming && !new Rect(confirmRect.position - expansion, confirmRect.size + 2 * expansion).Contains(mouse)) {
                     isConfirming = false;
                 }
                 if (isConfirming) {
@@ -2154,6 +2182,7 @@ namespace AmazingNewAccessoryLogic
         {
             AmazingNewAccessoryLogic.Logger.LogInfo($"Creating Logic for {data.Keys.Count} slots on outfit {outfit}");
             if (!graphs.TryGetValue(outfit, out LogicFlowGraph graph)) graph = createGraph(outfit);
+            graphData[graphs[outfit]].advanced = true;
 
             List<int> doneSlots = new List<int>();
 
@@ -2294,7 +2323,6 @@ namespace AmazingNewAccessoryLogic
             }
         }
 
-
         public void TranslateFromAssForCharacter(int? OutfitSlot = null, ChaFile chaFile = null)
         {
             if (chaFile == null) chaFile = MakerAPI.LastLoadedChaFile ?? ChaFileControl;
@@ -2378,7 +2406,7 @@ namespace AmazingNewAccessoryLogic
             {
                 if (tp.ClothingSlot >= 9) // There is only clothing slots 0-8, so >=9 indicates a custom group
                 {
-                    AmazingNewAccessoryLogic.Logger.LogInfo($"Coustom group trigger property found for Accessory {tp.Slot}, ClothingSlot {tp.ClothingSlot}; This is not supported (yet)!");
+                    AmazingNewAccessoryLogic.Logger.LogInfo($"Custom group trigger property found for Accessory {tp.Slot}, ClothingSlot {tp.ClothingSlot}; This is not supported (yet)!");
                     continue;
                 }
                 if (!triggersForSlot.ContainsKey(tp.Slot)) triggersForSlot.Add(tp.Slot, new Dictionary<int, TriggerProperty[]>());

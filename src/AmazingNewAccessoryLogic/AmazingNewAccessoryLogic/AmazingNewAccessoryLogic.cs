@@ -13,6 +13,8 @@ using KKAPI.Studio.UI;
 using BepInEx.Configuration;
 using KKAPI.Maker.UI.Sidebar;
 using System.Collections.Generic;
+using System.Linq;
+using static HandCtrl;
 
 namespace AmazingNewAccessoryLogic
 {
@@ -33,8 +35,9 @@ namespace AmazingNewAccessoryLogic
 
         public static AmazingNewAccessoryLogic Instance;
 
-        public static ConfigEntry<bool> Debug;
-        public static ConfigEntry<float> UIScaleModifier;
+        public static ConfigEntry<bool> Debug { get; private set; }
+        public static ConfigEntry<float> UIScaleModifier { get; private set; }
+        public static ConfigEntry<KeyboardShortcut> ShortcutOpen { get; private set; }
 
         void Awake()
         {
@@ -51,6 +54,7 @@ namespace AmazingNewAccessoryLogic
 
             Debug = Config.Bind("Advanced", "Debug", false, new ConfigDescription("Whether to log detailed debug messages", null, new KKAPI.Utilities.ConfigurationManagerAttributes{ IsAdvanced = true }));
             UIScaleModifier = Config.Bind("UI", "UI Scale Factor", Screen.height <= 1080 ? 1.3f : 1f, new ConfigDescription("Additional Scale to apply to the UI", new AcceptableValueRange<float>(0.5f, 2f)));
+            ShortcutOpen = Config.Bind("UI", "Open UI", new KeyboardShortcut(), new ConfigDescription("Keyboard shortcut to open / close the ANAL UI"));
 
             Patches.Patch();
         }
@@ -60,6 +64,27 @@ namespace AmazingNewAccessoryLogic
             if ( StudioAPI.InsideStudio)
             {
                 StudioLoaded();
+            }
+        }
+
+        void Update() {
+            if (ShortcutOpen.Value.IsDown()) {
+                if (MakerAPI.InsideMaker) {
+                    var ctrl = MakerAPI.GetCharacterControl().GetComponent<AnalCharaController>();
+                    SidebarToggle.SetValue(!ctrl?.displayGraph ?? false);
+                } else if (StudioAPI.InsideStudio) {
+                    var chars = StudioAPI.GetSelectedCharacters().ToList();
+                    if (chars.Count == 0) {
+                        Logger.LogMessage("Please select a character!");
+                    } else {
+                        var ctrl = chars[0].charInfo.GetComponent<AnalCharaController>();
+                        if (ctrl?.displayGraph ?? false) {
+                            ctrl?.Hide();
+                        } else {
+                            ctrl?.Show(false);
+                        }
+                    }
+                }
             }
         }
 
