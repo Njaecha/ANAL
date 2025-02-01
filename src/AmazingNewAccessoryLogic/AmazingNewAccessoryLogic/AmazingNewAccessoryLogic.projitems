@@ -13,12 +13,11 @@
     <Compile Include="$(MSBuildThisFileDirectory)ANAL.CameraComponent.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)ANAL.CharacterController.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)ANAL.GraphData.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)ANAL.Patches.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)ANAL.Hooks.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)ANAL.SerialisedGraph.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)ANAL.SerialisedNode.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)ANAL.TimelineHelper.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)ASS.TriggerProperty.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)ANAL.GroupNode.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)ANAL.Hooks.cs" />
   </ItemGroup>
 </Project>

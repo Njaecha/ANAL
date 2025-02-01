@@ -1,4 +1,5 @@
-﻿using UniRx;
+﻿using System;
+using UniRx;
 using KKAPI;
 using BepInEx;
 using HarmonyLib;
@@ -58,48 +59,69 @@ namespace AmazingNewAccessoryLogic
             AccessoriesApi.AccessoriesCopied += AccessoriesCopied;
             AccessoriesApi.AccessoryKindChanged += AccessoryKindChanged;
 
-            Debug = Config.Bind("Advanced", "Debug", false, new ConfigDescription("Whether to log detailed debug messages", null, new KKAPI.Utilities.ConfigurationManagerAttributes{ IsAdvanced = true }));
-            UIScaleModifier = Config.Bind("UI", "UI Scale Factor", Screen.height <= 1080 ? 1.3f : 1f, new ConfigDescription("Additional Scale to apply to the UI", new AcceptableValueRange<float>(0.5f, 2f)));
-            UIDeleteNodeKey = Config.Bind("Keybinds", "Delete Node", KeyCode.Delete, "Key press to delete the selected node(s)");
+            Debug = Config.Bind("Advanced", "Debug", false,
+                new ConfigDescription("Whether to log detailed debug messages", null,
+                    new KKAPI.Utilities.ConfigurationManagerAttributes { IsAdvanced = true }));
+            UIScaleModifier = Config.Bind("UI", "UI Scale Factor", Screen.height <= 1080 ? 1.3f : 1f,
+                new ConfigDescription("Additional Scale to apply to the UI",
+                    new AcceptableValueRange<float>(0.5f, 2f)));
+            UIDeleteNodeKey = Config.Bind("Keybinds", "Delete Node", KeyCode.Delete,
+                "Key press to delete the selected node(s)");
             UIDeleteNodeKey.SettingChanged += KeyCodeSettingChanged;
-            UIDisableNodeKey = Config.Bind("Keybinds", "Disable Node", KeyCode.D, "Key press to disable the selected node(s)");
+            UIDisableNodeKey = Config.Bind("Keybinds", "Disable Node", KeyCode.D,
+                "Key press to disable the selected node(s)");
             UIDisableNodeKey.SettingChanged += KeyCodeSettingChanged;
-            UISelecetTreeKey = Config.Bind("Keybinds", "Select Tree", KeyCode.T, "Key press to expand the selection to all downstream nodes");
+            UISelecetTreeKey = Config.Bind("Keybinds", "Select Tree", KeyCode.T,
+                "Key press to expand the selection to all downstream nodes");
             UISelecetTreeKey.SettingChanged += KeyCodeSettingChanged;
-            UISelectNetworkKey = Config.Bind("Keybinds", "Select Network", KeyCode.N, "Key press to expand the selection to all down and upstream nodes");
+            UISelectNetworkKey = Config.Bind("Keybinds", "Select Network", KeyCode.N,
+                "Key press to expand the selection to all down and upstream nodes");
             UISelectNetworkKey.SettingChanged += KeyCodeSettingChanged;
-            ShortcutOpen = Config.Bind("UI", "Open UI", new KeyboardShortcut(), new ConfigDescription("Keyboard shortcut to open / close the ANAL UI"));
+            ShortcutOpen = Config.Bind("UI", "Open UI", new KeyboardShortcut(),
+                new ConfigDescription("Keyboard shortcut to open / close the ANAL UI"));
 
-            Patches.Patch();
+            Hooks.SetupHooks();
         }
 
         private void KeyCodeSettingChanged(object sender, EventArgs e)
         {
-            CharacterApi.GetRegisteredBehaviour(GUID).Instances.Do(ctrl => ((AnalCharaController)ctrl).UpdateGraphKeybinds());
+            CharacterApi.GetRegisteredBehaviour(GUID).Instances
+                .Do(ctrl => ((AnalCharaController)ctrl).UpdateGraphKeybinds());
         }
 
         void Start()
         {
-            if ( StudioAPI.InsideStudio)
+            if (StudioAPI.InsideStudio)
             {
                 StudioLoaded();
             }
         }
 
-        void Update() {
-            if (ShortcutOpen.Value.IsDown()) {
-                if (MakerAPI.InsideMaker) {
+        void Update()
+        {
+            if (ShortcutOpen.Value.IsDown())
+            {
+                if (MakerAPI.InsideMaker)
+                {
                     var ctrl = MakerAPI.GetCharacterControl().GetComponent<AnalCharaController>();
                     SidebarToggle.SetValue(!ctrl?.displayGraph ?? false);
-                } else if (StudioAPI.InsideStudio) {
+                }
+                else if (StudioAPI.InsideStudio)
+                {
                     var chars = StudioAPI.GetSelectedCharacters().ToList();
-                    if (chars.Count == 0) {
+                    if (chars.Count == 0)
+                    {
                         Logger.LogMessage("Please select a character!");
-                    } else {
+                    }
+                    else
+                    {
                         var ctrl = chars[0].charInfo.GetComponent<AnalCharaController>();
-                        if (ctrl?.displayGraph ?? false) {
+                        if (ctrl?.displayGraph ?? false)
+                        {
                             ctrl?.Hide();
-                        } else {
+                        }
+                        else
+                        {
                             ctrl?.Show(false);
                         }
                     }
@@ -111,12 +133,15 @@ namespace AmazingNewAccessoryLogic
         {
             CurrentStateCategory currentStateCategory = StudioAPI.GetOrCreateCurrentStateCategory(null);
             currentStateCategory.AddControl(
-                new CurrentStateCategorySwitch("Show ANAL", 
-                c => c.GetChaControl().GetComponent<AnalCharaController>().displayGraph)).Value.Subscribe(
+                new CurrentStateCategorySwitch("Show ANAL",
+                    c => c.GetChaControl().GetComponent<AnalCharaController>().displayGraph)).Value.Subscribe(
                 display =>
                 {
-                    if (!display) StudioAPI.GetSelectedControllers<AnalCharaController>().Do(controller => controller.Hide());
-                    else StudioAPI.GetSelectedControllers<AnalCharaController>().Do(controller => controller.Show(Input.GetKey(KeyCode.LeftShift)));
+                    if (!display)
+                        StudioAPI.GetSelectedControllers<AnalCharaController>().Do(controller => controller.Hide());
+                    else
+                        StudioAPI.GetSelectedControllers<AnalCharaController>().Do(controller =>
+                            controller.Show(Input.GetKey(KeyCode.LeftShift)));
                 });
             TimelineHelper.PopulateTimeline();
         }
@@ -126,36 +151,45 @@ namespace AmazingNewAccessoryLogic
             ChaFileDefine.CoordinateType dType = e.CopyDestination;
             ChaFileDefine.CoordinateType sType = e.CopySource;
             IEnumerable<int> slots = e.CopiedSlotIndexes;
-            MakerAPI.GetCharacterControl().gameObject.GetComponent<AnalCharaController>().AccessoriesCopied((int)sType, (int)dType, slots);
+            MakerAPI.GetCharacterControl().gameObject.GetComponent<AnalCharaController>()
+                .AccessoriesCopied((int)sType, (int)dType, slots);
         }
 
         private void AccessoryTransferred(object sender, AccessoryTransferEventArgs e)
         {
             int dSlot = e.DestinationSlotIndex;
             int sSlot = e.SourceSlotIndex;
-            MakerAPI.GetCharacterControl().gameObject.GetComponent<AnalCharaController>().AccessoryTransferred(sSlot, dSlot);
+            MakerAPI.GetCharacterControl().gameObject.GetComponent<AnalCharaController>()
+                .AccessoryTransferred(sSlot, dSlot);
         }
 
-        private void AccessoryKindChanged(object sender, AccessorySlotEventArgs e) {
+        private void AccessoryKindChanged(object sender, AccessorySlotEventArgs e)
+        {
             int changedSlot = e.SlotIndex;
-            MakerAPI.GetCharacterControl().gameObject.GetComponent<AnalCharaController>().AccessoryKindChanged(changedSlot);
+            MakerAPI.GetCharacterControl().gameObject.GetComponent<AnalCharaController>()
+                .AccessoryKindChanged(changedSlot);
         }
 
         private void showGraphInMaker(bool b)
         {
             if (b)
             {
-                MakerAPI.GetCharacterControl()?.GetComponent<AnalCharaController>()?.Show(Input.GetKey(KeyCode.LeftShift));
+                MakerAPI.GetCharacterControl()?.GetComponent<AnalCharaController>()
+                    ?.Show(Input.GetKey(KeyCode.LeftShift));
             }
             else MakerAPI.GetCharacterControl()?.GetComponent<AnalCharaController>()?.Hide();
         }
 
-        internal static void showMakerButtons(bool show) {
+        internal static void showMakerButtons(bool show)
+        {
             if (!MakerAPI.InsideMaker) return;
-            foreach (GameObject btn in AccessoryButton.ControlObjects) {
+            foreach (GameObject btn in AccessoryButton.ControlObjects)
+            {
                 btn.SetActive(show);
             }
-            foreach (GameObject btn in AccessoryButton2.ControlObjects) {
+
+            foreach (GameObject btn in AccessoryButton2.ControlObjects)
+            {
                 btn.SetActive(show);
             }
         }
@@ -163,16 +197,15 @@ namespace AmazingNewAccessoryLogic
         private void createMakerInteractables(object sender, RegisterCustomControlsEvent e)
         {
             SidebarToggle = e.AddSidebarControl(new SidebarToggle("Show ANAL", false, this));
-            SidebarToggle.ValueChanged.Subscribe(delegate (bool b) {
-                showGraphInMaker(b);
-            });
+            SidebarToggle.ValueChanged.Subscribe(delegate(bool b) { showGraphInMaker(b); });
 
             AccessoryButton = MakerAPI.AddAccessoryWindowControl(new MakerButton("Create ANAL Output", null, this));
             AccessoryButton.GroupingID = "Buttons";
             AccessoryButton.OnClick.AddListener(() =>
             {
                 showGraphInMaker(true);
-                MakerAPI.GetCharacterControl()?.GetComponent<AnalCharaController>()?.addOutput(AccessoriesApi.SelectedMakerAccSlot);
+                MakerAPI.GetCharacterControl()?.GetComponent<AnalCharaController>()
+                    ?.addOutput(AccessoriesApi.SelectedMakerAccSlot);
             });
 
             AccessoryButton2 = MakerAPI.AddAccessoryWindowControl(new MakerButton("Create ANAL Input", null, this));
@@ -180,8 +213,10 @@ namespace AmazingNewAccessoryLogic
             AccessoryButton2.OnClick.AddListener(() =>
             {
                 showGraphInMaker(true);
-                AnalCharaController analCharaController = MakerAPI.GetCharacterControl()?.GetComponent<AnalCharaController>();
-                analCharaController?.addAdvancedInputAccessory(AccessoriesApi.SelectedMakerAccSlot, analCharaController.lfg.getSize()/2);
+                AnalCharaController analCharaController =
+                    MakerAPI.GetCharacterControl()?.GetComponent<AnalCharaController>();
+                analCharaController?.addAdvancedInputAccessory(AccessoriesApi.SelectedMakerAccSlot,
+                    analCharaController.lfg.getSize() / 2);
             });
         }
 

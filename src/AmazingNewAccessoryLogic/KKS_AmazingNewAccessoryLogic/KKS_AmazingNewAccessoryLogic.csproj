@@ -48,7 +48,7 @@
       <Private>False</Private>
     </Reference>
     <Reference Include="KKS_Fix_MakerOptimizations">
-      <HintPath>..\..\..\..\_Libs_KKS\KKS_Fix_MakerOptimizations.dll</HintPath>
+      <HintPath>..\..\..\lib\KKS_Fix_MakerOptimizations.dll</HintPath>
     </Reference>
     <Reference Include="New.UnityLogicFlows, Version=1.0.0.0, Culture=neutral, processorArchitecture=MSIL">
       <SpecificVersion>False</SpecificVersion>

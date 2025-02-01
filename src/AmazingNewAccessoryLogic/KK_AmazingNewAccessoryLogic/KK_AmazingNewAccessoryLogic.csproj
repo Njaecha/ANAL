@@ -60,7 +60,7 @@
       <Private>False</Private>
     </Reference>
     <Reference Include="KK_Fix_MakerOptimizations">
-      <HintPath>..\..\..\..\_Libs_KK\KK_Fix_MakerOptimizations.dll</HintPath>
+      <HintPath>..\..\..\lib\KK_Fix_MakerOptimizations.dll</HintPath>
     </Reference>
     <Reference Include="Old.UnityLogicFlows">
       <HintPath>..\..\..\lib\Old.UnityLogicFlows.dll</HintPath>
