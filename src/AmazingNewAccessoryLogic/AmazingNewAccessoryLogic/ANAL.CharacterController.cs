@@ -289,10 +289,10 @@ namespace AmazingNewAccessoryLogic
                     $"Copying acc from outfit {sourceOutfit} to {destinationOutfit}...");
 
             // Create variables
-            var srcGraph = graphs[sourceOutfit];
-            var srcData = srcGraph == null ? null : graphData[srcGraph];
             var dstGraph = graphs[destinationOutfit];
             var dstData = graphData[dstGraph];
+            var srcGraph = graphs.ContainsKey(sourceOutfit) ? graphs[sourceOutfit] : null;
+            var srcData = srcGraph == null ? null : graphData[srcGraph];
 
             // Copy data and nodes
             dstGraph.isLoading = true;
@@ -310,7 +310,7 @@ namespace AmazingNewAccessoryLogic
                 }
 
                 // Copy over data if it exists
-                if (!activeSlots[sourceOutfit].Contains(slot)) continue;
+                if (srcGraph == null || !activeSlots[sourceOutfit].Contains(slot)) continue;
                 if (AmazingNewAccessoryLogic.Debug.Value)
                     AmazingNewAccessoryLogic.Logger.LogInfo($"Copying new data...");
                 LogicFlowOutput sOutput = (LogicFlowOutput)srcGraph.getNodeAt(idxSlot);
