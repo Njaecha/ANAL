@@ -97,7 +97,12 @@ namespace AmazingNewAccessoryLogic
                         deserialiseGraph(version, outfit, sGraphs[outfit], sGraphData != null ? sGraphData[outfit] : null);
                         AmazingNewAccessoryLogic.Logger.LogDebug($"Loaded Logic Graph for outfit {outfit}");
                     }
-                    lfg?.ForceUpdate();
+                    StartCoroutine(UpdateLater());
+                    IEnumerator UpdateLater() {
+                        yield return null;
+                        yield return null;
+                        lfg?.ForceUpdate();
+                    }
                 }
             }
 
@@ -164,7 +169,12 @@ namespace AmazingNewAccessoryLogic
                         deserialiseGraph(version, coordIdx, sGraph, sGraphData);
                         AmazingNewAccessoryLogic.Logger.LogDebug($"Loaded Logic Graph for outfit {coordIdx}");
                     }
-                    lfg?.ForceUpdate();
+                    StartCoroutine(UpdateLater());
+                    IEnumerator UpdateLater() {
+                        yield return null;
+                        yield return null;
+                        lfg?.ForceUpdate();
+                    }
                 }
             }
 
