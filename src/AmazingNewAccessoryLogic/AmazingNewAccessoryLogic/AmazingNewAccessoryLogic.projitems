@@ -19,5 +19,6 @@
     <Compile Include="$(MSBuildThisFileDirectory)ANAL.TimelineHelper.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)ASS.TriggerProperty.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)ANAL.GroupNode.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)ANAL.Hooks.cs" />
   </ItemGroup>
 </Project>

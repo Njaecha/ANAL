@@ -431,13 +431,34 @@ namespace AmazingNewAccessoryLogic
             else activeSlots.Add(coord, new List<int>());
         }
 
+        public void UpdateGraphKeybinds()
+        {
+            graphs.Values.ToList().ForEach(graph =>
+            {
+                graph.KeyNodeDelete = AmazingNewAccessoryLogic.UIDeleteNodeKey.Value;
+                graph.KeyNodeDisable = AmazingNewAccessoryLogic.UIDisableNodeKey.Value;
+                graph.KeySelectTree = AmazingNewAccessoryLogic.UISelecetTreeKey.Value;
+                graph.KeySelectNetwork = AmazingNewAccessoryLogic.UISelectNetworkKey.Value;
+            });
+        }
+
         internal LogicFlowGraph createGraph(int? outfit = null)
         {
             if (!outfit.HasValue) outfit = ChaControl.fileStatus.coordinateType;
             if (graphs == null) graphs = new Dictionary<int, LogicFlowGraph>();
+
             if (graphData == null) graphData = new Dictionary<LogicFlowGraph, GraphData>();
             graphs[outfit.Value] = new LogicFlowGraph(new Rect(new Vector2(100,10), defaultGraphSize));
+
+            // set input keycodes
+            graphs[outfit.Value].KeyNodeDelete = AmazingNewAccessoryLogic.UIDeleteNodeKey.Value;
+            graphs[outfit.Value].KeyNodeDisable = AmazingNewAccessoryLogic.UIDisableNodeKey.Value;
+            graphs[outfit.Value].KeySelectTree = AmazingNewAccessoryLogic.UISelecetTreeKey.Value;
+            graphs[outfit.Value].KeySelectNetwork = AmazingNewAccessoryLogic.UISelectNetworkKey.Value;
+
+            // create simple mode data
             graphData[graphs[outfit.Value]] = new GraphData(this, graphs[outfit.Value]);
+
             if (activeSlots == null) activeSlots = new Dictionary<int, List<int>>();
             activeSlots[outfit.Value] = new List<int>();
             float topY = 900;
@@ -515,10 +536,10 @@ namespace AmazingNewAccessoryLogic
                     break;
 #else
                 case 1017:
-                    node = new LogicFlowInput_Func(() => getShoeState(7, 0, 0), g, key: 1017) {label = name ?? "Indoor On" };
+                    node = new LogicFlowInput_Func(() => getShoeState(7, 0, 0), g, (int)key) {label = name ?? "Indoor On" };
                     break;
                 case 1018:
-                    node = new LogicFlowInput_Func(() => getShoeState(8, 0, 1), g, key: 1018) {label = name ?? "Outdoor On" };
+                    node = new LogicFlowInput_Func(() => getShoeState(8, 0, 1), g, (int)key) {label = name ?? "Outdoor On" };
                     break;
 #endif          
                 default:
