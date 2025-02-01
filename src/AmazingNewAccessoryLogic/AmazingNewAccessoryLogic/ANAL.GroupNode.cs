@@ -38,7 +38,7 @@ namespace AmazingNewAccessoryLogic {
             calcTooltip();
         }
 
-        private void calcTooltip() {
+        internal void calcTooltip() {
             Min = 0;
             Max = 0;
             foreach (var kvp in controlledNodes) {

@@ -351,6 +351,7 @@ namespace AmazingNewAccessoryLogic
                             foreach (var idx in kvp.Value) hashEntry.Add(idx);
                             (node as LogicFlowNode_GRP).controlledNodes.Add(kvp.Key, hashEntry);
                         }
+                        (node as LogicFlowNode_GRP).calcTooltip();
                     }
                     break;
                 case SerialisedNode.NodeType.Input:
