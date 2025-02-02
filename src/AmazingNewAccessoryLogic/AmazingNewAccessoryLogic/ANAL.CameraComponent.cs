@@ -8,12 +8,11 @@ namespace AmazingNewAccessoryLogic
 {
     class AnalCameraComponent : MonoBehaviour
     {
-
         public EventHandler<CameraEventArgs> OnPostRenderEvent;
 
         void OnPostRender()
         {
-            OnPostRenderEvent?.Invoke(this, new CameraEventArgs() { camera = Camera.current});
+            OnPostRenderEvent?.Invoke(this, new CameraEventArgs() { camera = Camera.current });
         }
     }
 

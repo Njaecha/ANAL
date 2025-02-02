@@ -1,19 +1,15 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
+﻿using LogicFlows;
 using MessagePack;
 using UnityEngine;
-using LogicFlows;
+using System.Collections.Generic;
 
 namespace AmazingNewAccessoryLogic
 {
     [MessagePackObject]
     public class SerialisedGraph
     {
-        [Key("Size")]
-        public Vector2 size { get; set; }
-        [Key("Nodes")]
-        public List<SerialisedNode> nodes { get; set; }
+        [Key("Size")] public Vector2 size { get; set; }
+        [Key("Nodes")] public List<SerialisedNode> nodes { get; set; }
 
         public static SerialisedGraph Serialise(LogicFlowGraph graph)
         {
@@ -28,6 +24,7 @@ namespace AmazingNewAccessoryLogic
                     nodeList.Add(sNode);
                 }
             }
+
             sg.nodes = nodeList;
             return sg;
         }
