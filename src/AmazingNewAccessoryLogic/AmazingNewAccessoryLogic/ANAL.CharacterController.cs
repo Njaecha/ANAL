@@ -42,6 +42,7 @@ namespace AmazingNewAccessoryLogic
         internal Dictionary<int, List<int>> activeSlots = new Dictionary<int, List<int>>();
 
         internal bool displayGraph = false;
+        private bool lastCoordHadANAL = false;
         private static Material mat = new Material(Shader.Find("Hidden/Internal-Colored"));
 
         PluginData loadedCardData = null;
@@ -77,6 +78,15 @@ namespace AmazingNewAccessoryLogic
             graphData.Clear();
             graphs.Clear();
             activeSlots.Clear();
+
+            if (lastCoordHadANAL) {
+                for (int i = 0; i < ChaControl.infoAccessory.Length; i++) {
+                    if (ChaControl.infoAccessory[i] != null) {
+                        setAccessoryState(i, true);
+                    }
+                }
+            }
+            lastCoordHadANAL = false;
 
             PluginData data = maintainState ? loadedCardData : GetExtendedData();
             if (data == null)
@@ -517,6 +527,7 @@ namespace AmazingNewAccessoryLogic
         private LogicFlowGraph getCurrentGraph()
         {
             if (!graphs.ContainsKey(ChaControl.fileStatus.coordinateType)) return null;
+            lastCoordHadANAL = true;
             return graphs[ChaControl.fileStatus.coordinateType];
         }
 
