@@ -39,14 +39,14 @@ namespace AmazingNewAccessoryLogic
 
         private Dictionary<LogicFlowGraph, GraphData> graphData = new Dictionary<LogicFlowGraph, GraphData>();
         internal Dictionary<int, LogicFlowGraph> graphs = new Dictionary<int, LogicFlowGraph>();
-        internal Dictionary<int, List<int>> activeSlots = new Dictionary<int, List<int>>();
 
         internal bool displayGraph = false;
         private bool lastCoordHadANAL = false;
         private static Material mat = new Material(Shader.Find("Hidden/Internal-Colored"));
 
-        PluginData loadedCardData = null;
-        PluginData loadedCoordData = null;
+        public PluginData loadedCardData = null;
+        public PluginData loadedCoordData = null;
+        public SerialisedNode lastSNode = null;
 
         //render bodge 
         private RenderTexture rTex;
@@ -77,16 +77,6 @@ namespace AmazingNewAccessoryLogic
         {
             graphData.Clear();
             graphs.Clear();
-            activeSlots.Clear();
-
-            if (lastCoordHadANAL) {
-                for (int i = 0; i < ChaControl.infoAccessory.Length; i++) {
-                    if (ChaControl.infoAccessory[i] != null) {
-                        setAccessoryState(i, true);
-                    }
-                }
-            }
-            lastCoordHadANAL = false;
 
             PluginData data = maintainState ? loadedCardData : GetExtendedData();
             if (data == null)
@@ -174,8 +164,6 @@ namespace AmazingNewAccessoryLogic
                 graphs.Remove(coordIdx);
             }
 
-            activeSlots.Remove(coordIdx);
-
             PluginData data = maintainState ? loadedCoordData : GetCoordinateExtendedData(coordinate);
             if (data == null)
             {
@@ -232,7 +220,7 @@ namespace AmazingNewAccessoryLogic
 
             // Check if there's anything to do
             int outfit = ChaControl.fileStatus.coordinateType;
-            if (lfg == null || !activeSlots.ContainsKey(outfit)) return;
+            if (lfg == null || lfg.getNodeAt(sourceSlot + 1000000) == null) return;
 
             // Clear the destination node if we have any data of it
             LogicFlowOutput destNode = getOutput(destinationSlot, outfit);
@@ -242,7 +230,6 @@ namespace AmazingNewAccessoryLogic
                 if (AmazingNewAccessoryLogic.Debug.Value)
                     AmazingNewAccessoryLogic.Logger.LogInfo($"Removing old data...");
                 data.PurgeNode(destNode);
-                activeSlots[outfit].Remove(destinationSlot);
                 lfg.RemoveNode(destNode.index);
             }
 
@@ -275,11 +262,7 @@ namespace AmazingNewAccessoryLogic
                 if (AmazingNewAccessoryLogic.Debug.Value) AmazingNewAccessoryLogic.Logger.LogInfo($"Removing...");
                 int outfit = ChaControl.fileStatus.coordinateType;
                 graphData[lfg].PurgeNode(getOutput(slot));
-                if (activeSlots[outfit].Contains(slot))
-                {
-                    lfg.RemoveNode(slot + 1000000);
-                    activeSlots[outfit].Remove(slot);
-                }
+                lfg.RemoveNode(slot + 1000000);
             }
         }
 
@@ -320,7 +303,7 @@ namespace AmazingNewAccessoryLogic
                 }
 
                 // Copy over data if it exists
-                if (srcGraph == null || !activeSlots[sourceOutfit].Contains(slot)) continue;
+                if (srcGraph == null || srcGraph.getNodeAt(idxSlot) == null) continue;
                 if (AmazingNewAccessoryLogic.Debug.Value)
                     AmazingNewAccessoryLogic.Logger.LogInfo($"Copying new data...");
                 LogicFlowOutput sOutput = (LogicFlowOutput)srcGraph.getNodeAt(idxSlot);
@@ -377,7 +360,6 @@ namespace AmazingNewAccessoryLogic
         {
             var newGraph = new LogicFlowGraph(new Rect(new Vector2(200, 200), sGraph.size));
             graphs.Add(outfit, newGraph);
-            activeSlots[outfit] = new List<int>();
             newGraph.isLoading = true;
             foreach (SerialisedNode sNode in sGraph.nodes.Where(x => x.type != SerialisedNode.NodeType.Gate_GRP))
                 deserialiseNode(version, outfit, sNode);
@@ -395,8 +377,9 @@ namespace AmazingNewAccessoryLogic
             if (AmazingNewAccessoryLogic.Debug.Value)
             {
                 AmazingNewAccessoryLogic.Logger.LogInfo(
-                    $"Deserialising node: {sNode.type}, {sNode.name}, {sNode.index}");
+                    $"Deserialising node: Outfit {outfit}, {sNode.type}, {sNode.name}, {sNode.index}");
             }
+            lastSNode = sNode;
 
             LogicFlowNode node = null;
             switch (sNode.type)
@@ -457,18 +440,20 @@ namespace AmazingNewAccessoryLogic
                     if (version == 1 && sNode.data.Count > 1)
                     {
                         node = addOutput(sNode.data[0], outfit);
-                        StartCoroutine(SetInputLater(1));
+                        StartCoroutine(SetInputLater(sNode.data[0] + 1000000, outfit, sNode.data[1]));
                     }
                     else
                     {
                         node = addOutput(sNode.index - 1000000, outfit, sNode.name);
-                        if (sNode.data?.Count > 0) StartCoroutine(SetInputLater(0));
+                        if (node == null) AmazingNewAccessoryLogic.Logger.
+                                LogMessage($"No output could be added for outfit {outfit}, slot {sNode.index - 999999}!");
+                        if (sNode.data?.Count > 0) StartCoroutine(SetInputLater(sNode.index, outfit, sNode.data[0]));
                     }
 
-                    IEnumerator SetInputLater(int which)
+                    IEnumerator SetInputLater(int _nodeIdx, int _outfit, int _inputIdx)
                     {
                         yield return null;
-                        node.SetInput(sNode.data[which], 0);
+                        graphs[_outfit].getNodeAt(_nodeIdx).SetInput(_inputIdx, 0);
                     }
 
                     break;
@@ -542,9 +527,6 @@ namespace AmazingNewAccessoryLogic
             {
                 graphs.Add(coord, g);
             }
-
-            if (activeSlots.ContainsKey(coord)) activeSlots[coord].Clear();
-            else activeSlots.Add(coord, new List<int>());
         }
 
         public void UpdateGraphKeybinds()
@@ -575,8 +557,6 @@ namespace AmazingNewAccessoryLogic
             // create simple mode data
             graphData[graphs[outfit.Value]] = new GraphData(this, graphs[outfit.Value]);
 
-            if (activeSlots == null) activeSlots = new Dictionary<int, List<int>>();
-            activeSlots[outfit.Value] = new List<int>();
             float topY = 900;
 
             int i = 1;
@@ -1102,23 +1082,20 @@ namespace AmazingNewAccessoryLogic
 
             if (graphs.ContainsKey(outfit.Value))
             {
-                if (activeSlots.ContainsKey(outfit.Value) && activeSlots[outfit.Value].Contains(slot)) return null;
-                activeSlots[outfit.Value].Add(slot);
+                int idxSlot = 1000000 + slot;
+                var existingNode = graphs[outfit.Value].getNodeAt(idxSlot);
+                if (existingNode != null) return (LogicFlowOutput)existingNode;
                 var graph = graphs[outfit.Value];
                 LogicFlowOutput output =
-                    new LogicFlowOutput_Action((value) => setAccessoryState(slot, value), graph, key: 1000000 + slot)
+                    new LogicFlowOutput_Action((value) => setAccessoryState(slot, value), graph, key: idxSlot)
                         { label = name ?? $"Slot {slot + 1}", toolTipText = $"Slot {slot + 1}" };
-                output.setPosition(OutputPos(activeSlots[outfit.Value].Count));
+                int numOut = graphs[outfit.Value].getAllNodes().Where(x => x is LogicFlowOutput).Count();
+                output.setPosition(OutputPos(numOut + 1));
                 if (graph.getSize().x < output.getPosition().x + 80f)
-                {
                     graph.setSize(new Vector2(output.getPosition().x + 80f, graph.getSize().y));
-                }
 
                 output.nodeDeletedEvent += (object sender, NodeDeletedEventArgs e) =>
-                {
                     AmazingNewAccessoryLogic.Logger.LogInfo($"Removed Slot {slot} on outfit {outfit.Value}");
-                    activeSlots[outfit.Value].Remove(slot);
-                };
                 return output;
             }
 
@@ -1277,6 +1254,15 @@ namespace AmazingNewAccessoryLogic
                 IEnumerator UpdateLater()
                 {
                     for (int i = 0; i < 2; i++) yield return null;
+                    if (lastCoordHadANAL)
+                    {
+                        if (AmazingNewAccessoryLogic.Debug.Value)
+                            AmazingNewAccessoryLogic.Logger.LogInfo("Resetting accessories!");
+                        lastCoordHadANAL = false;
+                        for (int i = 0; i < ChaControl.infoAccessory.Length; i++)
+                            if (ChaControl.infoAccessory[i] != null)
+                                setAccessoryState(i, true);
+                    }
                     lfg?.ForceUpdate();
                 }
             }
@@ -1324,6 +1310,11 @@ namespace AmazingNewAccessoryLogic
             return (num + (num / 35) - 1) / 18;
         }
 
+        /// <summary>
+        /// Calculate the position of the n-th output
+        /// </summary>
+        /// <param name="num">The 1-indexed number of the output</param>
+        /// <returns>The calculated position</returns>
         internal static Vector2 OutputPos(int num)
         {
             int col = OutputCol(num);
@@ -1663,7 +1654,8 @@ namespace AmazingNewAccessoryLogic
                                                     renameRect =
                                                         new Rect(
                                                             Event.current.mousePosition - new Vector2(120, 20) +
-                                                            grpRect.position + simpleWindowRect.position,
+                                                            grpRect.position + simpleWindowRect.position -
+                                                            simpleWindowScrollPosGrp,
                                                             new Vector2(240, 40));
                                                     renameName = node.getName();
                                                 }

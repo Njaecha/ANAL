@@ -406,14 +406,7 @@ namespace AmazingNewAccessoryLogic
             }
 
             foreach (int idx in toRemove)
-            {
-                if (idx > 999999 && idx < 1001000)
-                {
-                    ctrl.activeSlots[outfit].Remove(idx - 1000000);
-                }
-
                 graph.RemoveNode(idx);
-            }
 
             // Connect outputs to group nodes
             foreach (var kvp in groupChildren)
@@ -635,14 +628,7 @@ namespace AmazingNewAccessoryLogic
             }
 
             foreach (int idx in toRemove)
-            {
-                if (idx > 999999 && idx < 1001000)
-                {
-                    ctrl.activeSlots[outfit].Remove(idx - 1000000);
-                }
-
                 graph.RemoveNode(idx);
-            }
 
             // Prettify layout
             if (AmazingNewAccessoryLogic.Debug.Value) AmazingNewAccessoryLogic.Logger.LogInfo("Arranging nodes...");
