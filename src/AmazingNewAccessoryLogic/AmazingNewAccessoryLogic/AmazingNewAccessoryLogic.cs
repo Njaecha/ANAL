@@ -26,7 +26,7 @@ namespace AmazingNewAccessoryLogic
     {
         public const string PluginName = "AmazingNewAccessoryLogic";
         public const string GUID = "org.njaecha.plugins.anal";
-        public const string Version = "0.1.0";
+        public const string Version = "0.1.1";
 
         internal new static ManualLogSource Logger;
 
