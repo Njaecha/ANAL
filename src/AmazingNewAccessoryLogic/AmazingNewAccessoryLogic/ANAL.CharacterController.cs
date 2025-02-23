@@ -257,7 +257,7 @@ namespace AmazingNewAccessoryLogic
 
             if (AmazingNewAccessoryLogic.Debug.Value)
                 AmazingNewAccessoryLogic.Logger.LogInfo($"Acc in slot {slot + 1} changed kind!");
-            if (forceRemove || AccessoriesApi.GetCvsAccessory(slot).ddAcsType.value == 0)
+            if (forceRemove || ChaControl.objAccessory[slot] == null)
             {
                 if (AmazingNewAccessoryLogic.Debug.Value) AmazingNewAccessoryLogic.Logger.LogInfo($"Removing...");
                 int outfit = ChaControl.fileStatus.coordinateType;
