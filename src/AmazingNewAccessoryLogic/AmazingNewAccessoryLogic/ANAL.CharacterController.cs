@@ -1253,15 +1253,18 @@ namespace AmazingNewAccessoryLogic
 
                 IEnumerator UpdateLater()
                 {
-                    for (int i = 0; i < 2; i++) yield return null;
-                    if (lastCoordHadANAL)
+                    if((!StudioAPI.InsideStudio)
                     {
-                        if (AmazingNewAccessoryLogic.Debug.Value)
-                            AmazingNewAccessoryLogic.Logger.LogInfo("Resetting accessories!");
-                        lastCoordHadANAL = false;
-                        for (int i = 0; i < ChaControl.infoAccessory.Length; i++)
-                            if (ChaControl.infoAccessory[i] != null)
-                                setAccessoryState(i, true);
+                        for (int i = 0; i < 2; i++) yield return null;
+                        if (lastCoordHadANAL)
+                        {
+                            if (AmazingNewAccessoryLogic.Debug.Value)
+                                AmazingNewAccessoryLogic.Logger.LogInfo("Resetting accessories!");
+                            lastCoordHadANAL = false;
+                            for (int i = 0; i < ChaControl.infoAccessory.Length; i++)
+                                if (ChaControl.infoAccessory[i] != null)
+                                    setAccessoryState(i, true);
+                        }
                     }
                     lfg?.ForceUpdate();
                 }
