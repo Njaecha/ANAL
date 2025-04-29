@@ -1259,7 +1259,7 @@ namespace AmazingNewAccessoryLogic
                 IEnumerator UpdateLater()
                 {
                     for (int i = 0; i < 2; i++) yield return null;
-                    if (lastCoordHadANAL)
+                    if (lastCoordHadANAL && !StudioAPI.InsideStudio)
                     {
                         if (AmazingNewAccessoryLogic.Debug.Value)
                             AmazingNewAccessoryLogic.Logger.LogInfo("Resetting accessories!");
