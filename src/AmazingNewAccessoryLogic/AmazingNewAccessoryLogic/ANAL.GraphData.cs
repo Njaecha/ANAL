@@ -337,7 +337,7 @@ namespace AmazingNewAccessoryLogic
             if (advanced) return;
 
             // Get outfit of graph
-            int outfit = ctrl.graphs.Where(x => x.Value == graph).FirstOrDefault().Key;
+            int outfit = ctrl.graphs.FirstOrDefault(x => x.Value == graph).Key;
 
             graph.isLoading = true;
 
@@ -509,7 +509,7 @@ namespace AmazingNewAccessoryLogic
                     if (activeBindings.Contains(0))
                     {
                         // The off input is bound, so we can invert the single remaining input
-                        int inverse = (int)bindKeys.Where(x => !activeBindings.Contains((int)x)).First();
+                        int inverse = (int)bindKeys.First(x => !activeBindings.Contains((int)x));
                         var not = ctrl.addNotForInput(inverse, outfit);
                         boundNode.SetInput(not.index, 0);
                     }
@@ -581,7 +581,7 @@ namespace AmazingNewAccessoryLogic
 
         private void CleanGraph()
         {
-            int outfit = ctrl.graphs.Where(x => x.Value == graph).FirstOrDefault().Key;
+            int outfit = ctrl.graphs.FirstOrDefault(x => x.Value == graph).Key;
 
             // Get all node indices whose outputs are being used
             if (AmazingNewAccessoryLogic.Debug.Value)

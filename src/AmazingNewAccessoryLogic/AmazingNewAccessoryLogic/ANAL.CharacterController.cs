@@ -34,6 +34,8 @@ namespace AmazingNewAccessoryLogic
             private set => setCurrentGraph(value);
         }
 
+        public bool IsCurrentAdvanced => lfg != null && graphData[lfg].advanced;
+
         internal static Dictionary<LogicFlowGraph, Dictionary<int, List<object>>> serialisationData =
             new Dictionary<LogicFlowGraph, Dictionary<int, List<object>>>();
 
@@ -124,9 +126,8 @@ namespace AmazingNewAccessoryLogic
                     }
                 }
             }
-
-            bool show = lfg != null ? graphData[lfg].advanced : false;
-            AmazingNewAccessoryLogic.showMakerButtons(show);
+            
+            AmazingNewAccessoryLogic.UpdateMakerButtonVisibility();
 
             base.OnReload(currentGameMode, maintainState);
         }
@@ -208,8 +209,7 @@ namespace AmazingNewAccessoryLogic
                 }
             }
 
-            bool show = lfg != null ? graphData[lfg].advanced : false;
-            AmazingNewAccessoryLogic.showMakerButtons(show);
+            AmazingNewAccessoryLogic.UpdateMakerButtonVisibility();
         }
 
         internal void AccessoryTransferred(int sourceSlot, int destinationSlot)
@@ -351,6 +351,11 @@ namespace AmazingNewAccessoryLogic
             dstGraph.isLoading = false;
         }
 
+        public void OutfitChanged()
+        {
+            
+        }
+        
         #endregion
 
         #region Deserialisation
@@ -535,7 +540,7 @@ namespace AmazingNewAccessoryLogic
             {
                 graph.KeyNodeDelete = AmazingNewAccessoryLogic.UIDeleteNodeKey.Value;
                 graph.KeyNodeDisable = AmazingNewAccessoryLogic.UIDisableNodeKey.Value;
-                graph.KeySelectTree = AmazingNewAccessoryLogic.UISelecetTreeKey.Value;
+                graph.KeySelectTree = AmazingNewAccessoryLogic.UISelectedTreeKey.Value;
                 graph.KeySelectNetwork = AmazingNewAccessoryLogic.UISelectNetworkKey.Value;
             });
         }
@@ -551,7 +556,7 @@ namespace AmazingNewAccessoryLogic
             // set input keycodes
             graphs[outfit.Value].KeyNodeDelete = AmazingNewAccessoryLogic.UIDeleteNodeKey.Value;
             graphs[outfit.Value].KeyNodeDisable = AmazingNewAccessoryLogic.UIDisableNodeKey.Value;
-            graphs[outfit.Value].KeySelectTree = AmazingNewAccessoryLogic.UISelecetTreeKey.Value;
+            graphs[outfit.Value].KeySelectTree = AmazingNewAccessoryLogic.UISelectedTreeKey.Value;
             graphs[outfit.Value].KeySelectNetwork = AmazingNewAccessoryLogic.UISelectNetworkKey.Value;
 
             // create simple mode data
@@ -1264,14 +1269,11 @@ namespace AmazingNewAccessoryLogic
                                 setAccessoryState(i, true);
                     }
                     lfg?.ForceUpdate();
+                    AmazingNewAccessoryLogic.UpdateMakerButtonVisibility();
                 }
             }
 
-            if (lfg == null)
-            {
-                if (MakerAPI.InsideAndLoaded) AmazingNewAccessoryLogic.SidebarToggle.Value = false;
-                return;
-            }
+            if (lfg == null) return;
 
             if (displayGraph)
             {
@@ -1496,7 +1498,7 @@ namespace AmazingNewAccessoryLogic
                                 onConfirm = () =>
                                 {
                                     graphData[lfg].advanced = true;
-                                    AmazingNewAccessoryLogic.showMakerButtons(true);
+                                    AmazingNewAccessoryLogic.UpdateMakerButtonVisibility();
                                 };
                                 isConfirming = true;
                             }
@@ -1588,8 +1590,8 @@ namespace AmazingNewAccessoryLogic
                             GUILayout.EndArea();
 
                             // Group list
-                            var grpNodes = lfg.nodes.Values.Where(x => x is LogicFlowNode_GRP)
-                                .Select(x => x as LogicFlowNode_GRP).ToList();
+                            var grpNodes = lfg.nodes.Values
+                                .OfType<LogicFlowNode_GRP>().ToList();
                             grpNodes.Sort((x, y) => x.label.CompareTo(y.label));
                             var grpRect = new Rect(new Vector2(wS.x / 2f + 2.5f, 40f), size);
                             GUI.Box(grpRect, "");
@@ -1970,7 +1972,7 @@ namespace AmazingNewAccessoryLogic
                     onConfirm = () =>
                     {
                         graphData[lfg].advanced = false;
-                        AmazingNewAccessoryLogic.showMakerButtons(false);
+                        AmazingNewAccessoryLogic.UpdateMakerButtonVisibility();
                     };
                     isConfirming = true;
                 }

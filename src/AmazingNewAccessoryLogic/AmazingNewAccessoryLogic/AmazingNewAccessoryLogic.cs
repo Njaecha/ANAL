@@ -15,6 +15,7 @@ using BepInEx.Configuration;
 using KKAPI.Maker.UI.Sidebar;
 using System.Collections.Generic;
 using System.Linq;
+using Studio;
 using static HandCtrl;
 
 namespace AmazingNewAccessoryLogic
@@ -26,7 +27,7 @@ namespace AmazingNewAccessoryLogic
     {
         public const string PluginName = "AmazingNewAccessoryLogic";
         public const string GUID = "org.njaecha.plugins.anal";
-        public const string Version = "0.1.1";
+        public const string Version = "0.1.2";
 
         internal new static ManualLogSource Logger;
 
@@ -42,13 +43,14 @@ namespace AmazingNewAccessoryLogic
 
         public static ConfigEntry<KeyCode> UIDeleteNodeKey;
         public static ConfigEntry<KeyCode> UIDisableNodeKey;
-        public static ConfigEntry<KeyCode> UISelecetTreeKey;
+        public static ConfigEntry<KeyCode> UISelectedTreeKey;
         public static ConfigEntry<KeyCode> UISelectNetworkKey;
 
 
         void Awake()
         {
             MakerAPI.MakerBaseLoaded += createMakerInteractables;
+            MakerAPI.ReloadCustomInterface += (sender, args) => UpdateMakerButtonVisibility();
             Logger = base.Logger;
 
 
@@ -58,6 +60,7 @@ namespace AmazingNewAccessoryLogic
             AccessoriesApi.AccessoryTransferred += AccessoryTransferred;
             AccessoriesApi.AccessoriesCopied += AccessoriesCopied;
             AccessoriesApi.AccessoryKindChanged += AccessoryKindChanged;
+            AccessoriesApi.SelectedMakerAccSlotChanged += (sender, args) => UpdateMakerButtonVisibility();
 
             Debug = Config.Bind("Advanced", "Debug", false,
                 new ConfigDescription("Whether to log detailed debug messages", null,
@@ -71,9 +74,9 @@ namespace AmazingNewAccessoryLogic
             UIDisableNodeKey = Config.Bind("Keybinds", "Disable Node", KeyCode.D,
                 "Key press to disable the selected node(s)");
             UIDisableNodeKey.SettingChanged += KeyCodeSettingChanged;
-            UISelecetTreeKey = Config.Bind("Keybinds", "Select Tree", KeyCode.T,
+            UISelectedTreeKey = Config.Bind("Keybinds", "Select Tree", KeyCode.T,
                 "Key press to expand the selection to all downstream nodes");
-            UISelecetTreeKey.SettingChanged += KeyCodeSettingChanged;
+            UISelectedTreeKey.SettingChanged += KeyCodeSettingChanged;
             UISelectNetworkKey = Config.Bind("Keybinds", "Select Network", KeyCode.N,
                 "Key press to expand the selection to all down and upstream nodes");
             UISelectNetworkKey.SettingChanged += KeyCodeSettingChanged;
@@ -81,6 +84,7 @@ namespace AmazingNewAccessoryLogic
                 new ConfigDescription("Keyboard shortcut to open / close the ANAL UI"));
 
             Hooks.SetupHooks();
+            
         }
 
         private void KeyCodeSettingChanged(object sender, EventArgs e)
@@ -103,19 +107,19 @@ namespace AmazingNewAccessoryLogic
             {
                 if (MakerAPI.InsideMaker)
                 {
-                    var ctrl = MakerAPI.GetCharacterControl().GetComponent<AnalCharaController>();
+                    AnalCharaController ctrl = MakerAPI.GetCharacterControl().GetComponent<AnalCharaController>();
                     SidebarToggle.SetValue(!ctrl?.displayGraph ?? false);
                 }
                 else if (StudioAPI.InsideStudio)
                 {
-                    var chars = StudioAPI.GetSelectedCharacters().ToList();
+                    List<OCIChar> chars = StudioAPI.GetSelectedCharacters().ToList();
                     if (chars.Count == 0)
                     {
                         Logger.LogMessage("Please select a character!");
                     }
                     else
                     {
-                        var ctrl = chars[0].charInfo.GetComponent<AnalCharaController>();
+                        AnalCharaController ctrl = chars[0].charInfo.GetComponent<AnalCharaController>();
                         if (ctrl?.displayGraph ?? false)
                         {
                             ctrl?.Hide();
@@ -179,19 +183,32 @@ namespace AmazingNewAccessoryLogic
             }
             else MakerAPI.GetCharacterControl()?.GetComponent<AnalCharaController>()?.Hide();
         }
-
-        internal static void showMakerButtons(bool show)
+        
+        internal static void UpdateMakerButtonVisibility()
         {
             if (!MakerAPI.InsideMaker) return;
-            foreach (GameObject btn in AccessoryButton.ControlObjects)
+            AnalCharaController controller = MakerAPI.GetCharacterControl().GetComponent<AnalCharaController>();
+            var show = false;
+            if (controller) show = controller.IsCurrentAdvanced;
+            if (show)
+            {
+                // slot is selected
+                show = AccessoriesApi.SelectedMakerAccSlot != -1 &&
+                       // accessory type is not none
+                       MakerAPI.GetCharacterControl().nowCoordinate.accessory.parts[AccessoriesApi.SelectedMakerAccSlot]
+                           .type != (int)ChaListDefine.CategoryNo.ao_none;
+            }
+            foreach (GameObject btn in AccessoryButton.ControlObjects.Where(b => b.activeSelf != show))
             {
                 btn.SetActive(show);
             }
 
-            foreach (GameObject btn in AccessoryButton2.ControlObjects)
+            foreach (GameObject btn in AccessoryButton2.ControlObjects.Where(b => b.activeSelf != show))
             {
                 btn.SetActive(show);
             }
+            
+            Logger.LogDebug($"Setting MakerButtons to {show}");
         }
 
         private void createMakerInteractables(object sender, RegisterCustomControlsEvent e)
@@ -218,6 +235,8 @@ namespace AmazingNewAccessoryLogic
                 analCharaController?.addAdvancedInputAccessory(AccessoriesApi.SelectedMakerAccSlot,
                     analCharaController.lfg.getSize() / 2);
             });
+            
+            UpdateMakerButtonVisibility();
         }
 
         internal CursorManager getMakerCursorMangaer()
