@@ -353,7 +353,24 @@ namespace AmazingNewAccessoryLogic
 
         public void OutfitChanged()
         {
-            
+            AmazingNewAccessoryLogic.Logger.LogDebug("Coordinate changed, applying data...");
+            StartCoroutine(UpdateLater());
+        }
+        
+        private IEnumerator UpdateLater()
+        {
+            for (int i = 0; i < 2; i++) yield return null;
+            if (lastCoordHadANAL && !StudioAPI.InsideStudio)
+            {
+                if (AmazingNewAccessoryLogic.Debug.Value)
+                    AmazingNewAccessoryLogic.Logger.LogInfo("Resetting accessories!");
+                lastCoordHadANAL = false;
+                for (int i = 0; i < ChaControl.infoAccessory.Length; i++)
+                    if (ChaControl.infoAccessory[i] != null)
+                        setAccessoryState(i, true);
+            }
+            lfg?.ForceUpdate();
+            AmazingNewAccessoryLogic.UpdateMakerButtonVisibility();
         }
         
         #endregion
@@ -1246,33 +1263,8 @@ namespace AmazingNewAccessoryLogic
             base.Start();
         }
 
-        int oldCoord = 0;
-
         protected override void Update()
         {
-            if (ChaControl.fileStatus.coordinateType != oldCoord)
-            {
-                AmazingNewAccessoryLogic.Logger.LogDebug("Coordinate changed, applying data...");
-                oldCoord = ChaControl.fileStatus.coordinateType;
-                StartCoroutine(UpdateLater());
-
-                IEnumerator UpdateLater()
-                {
-                    for (int i = 0; i < 2; i++) yield return null;
-                    if (lastCoordHadANAL && !StudioAPI.InsideStudio)
-                    {
-                        if (AmazingNewAccessoryLogic.Debug.Value)
-                            AmazingNewAccessoryLogic.Logger.LogInfo("Resetting accessories!");
-                        lastCoordHadANAL = false;
-                        for (int i = 0; i < ChaControl.infoAccessory.Length; i++)
-                            if (ChaControl.infoAccessory[i] != null)
-                                setAccessoryState(i, true);
-                    }
-                    lfg?.ForceUpdate();
-                    AmazingNewAccessoryLogic.UpdateMakerButtonVisibility();
-                }
-            }
-
             if (lfg == null) return;
 
             if (displayGraph)

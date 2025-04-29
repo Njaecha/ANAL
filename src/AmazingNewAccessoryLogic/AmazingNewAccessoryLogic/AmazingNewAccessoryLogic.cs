@@ -207,8 +207,6 @@ namespace AmazingNewAccessoryLogic
             {
                 btn.SetActive(show);
             }
-            
-            Logger.LogDebug($"Setting MakerButtons to {show}");
         }
 
         private void createMakerInteractables(object sender, RegisterCustomControlsEvent e)
